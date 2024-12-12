@@ -120,7 +120,7 @@ h05 = h04 - wc - wcore
 T05 = flasher.flash(H_mass=h05.magnitude, P=p04.magnitude, zs=zs).T * unit('K')
 r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / eta_t)
 p05 = p04 / r_pt
-T05 = flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs).T * unit('K')
+ST05 = flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs).T * unit('K')
 T5 = T05 - 0.5 / cP_e * Vjb ** 2
 r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / eta_t)
 p05 = p04 / r_pt

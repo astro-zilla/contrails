@@ -44,8 +44,8 @@ lines = {"nacelle": [],
          "nosecone": []}
 
 Dfan = 68.3*unit('in').to_base_units()
-scale = (Dfan/paths[7][0].poly()(0).imag).magnitude
-print(scale)
+scale = abs((Dfan/2/(paths[7][0].poly()(0).imag-paths[6][0].poly()(0).imag)).magnitude)
+print(f"{scale = :f}")
 
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 10)
@@ -79,6 +79,11 @@ lines["core_tail_inner"][-1] = lines["tail_zero_rad"][0]
 #     plt.plot([point.x.magnitude for point in lines[key]], [point.y.magnitude for point in lines[key]], '.-', color=colors[i])
 # plt.axis("equal")
 # plt.show()
+y0 = lines["centreline"][0].y.magnitude
+Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude-y0)**2-(lines["bypass_iface"][-1].y.magnitude-y0)**2)
+Ac = np.pi * ((lines["core_iface"][-1].y.magnitude-y0)**2-(lines["core_iface"][0].y.magnitude-y0)**2)
+print(f"{Ab = :f}\n{Ac = :f}")
+exit()
 
 # draw lines in sketch segment by segment
 sketch = Sketch()
