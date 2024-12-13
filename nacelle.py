@@ -75,16 +75,24 @@ lines["core_tail_outer"][0] = lines["core_iface"][-1]
 lines["core_tail_inner"][0] = lines["core_iface"][0]
 lines["core_tail_inner"][-1] = lines["tail_zero_rad"][0]
 
-# for i, key in enumerate(lines.keys()):
-#     plt.plot([point.x.magnitude for point in lines[key]], [point.y.magnitude for point in lines[key]], '.-', color=colors[i])
-# plt.axis("equal")
-# plt.show()
+y0 = lines["centreline"][-1].y.magnitude
+Ab = np.pi*((lines["bypass_iface"][0].y.magnitude-y0)**2-(lines["bypass_iface"][-1].y.magnitude-y0)**2)*unit('m^2')
+Ac = np.pi*((lines["core_iface"][-1].y.magnitude-y0)**2-(lines["core_iface"][0].y.magnitude-y0)**2)*unit('m^2')
+# POWER OF 10
+print(f"{Ab = }, {Ac = }")
 y0 = lines["centreline"][0].y.magnitude
 Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude-y0)**2-(lines["bypass_iface"][-1].y.magnitude-y0)**2)
 Ac = np.pi * ((lines["core_iface"][-1].y.magnitude-y0)**2-(lines["core_iface"][0].y.magnitude-y0)**2)
 print(f"{Ab = :f}\n{Ac = :f}")
 exit()
 
+for i, key in enumerate(lines.keys()):
+    plt.plot([point.x.magnitude for point in lines[key]], [point.y.magnitude for point in lines[key]], '-', label=key, color=colors[i])
+plt.legend(loc="upper right")
+plt.axis("equal")
+plt.ylim(1.6,2.4)
+plt.show()
+exit()
 # draw lines in sketch segment by segment
 sketch = Sketch()
 for key in lines.keys():
