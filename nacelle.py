@@ -43,10 +43,11 @@ lines = {"nacelle": [],
          "tail_zero_rad": [],
          "nosecone": []}
 
-Dfan = 68.3*unit('in').to_base_units()
+Dfan = 81*unit('in').to_base_units()
+print(f"{Dfan = :f}")
 scale = abs((Dfan/2/(paths[7][0].poly()(0).imag-paths[6][0].poly()(0).imag)).magnitude)
 print(f"{scale = :f}")
-
+print(paths)
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 10)
 colors = [c for c in TABLEAU_COLORS.values()] + ['black']
@@ -83,8 +84,8 @@ print(f"{Ab = }, {Ac = }")
 y0 = lines["centreline"][0].y.magnitude
 Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude-y0)**2-(lines["bypass_iface"][-1].y.magnitude-y0)**2)
 Ac = np.pi * ((lines["core_iface"][-1].y.magnitude-y0)**2-(lines["core_iface"][0].y.magnitude-y0)**2)
-print(f"{Ab = :f}\n{Ac = :f}")
-exit()
+Af = np.pi * ((lines["fan_iface"][0].y.magnitude-y0)**2-(lines["fan_iface"][-1].y.magnitude-y0)**2)
+print(f"{Ab = :f}\n{Ac = :f}\n{Af = :f}")
 
 for i, key in enumerate(lines.keys()):
     plt.plot([point.x.magnitude for point in lines[key]], [point.y.magnitude for point in lines[key]], '-', label=key, color=colors[i])
@@ -115,8 +116,8 @@ design = modeler.create_design(f"nacelle")
 design.revolve_sketch("Nacelle", sketch, UNITVECTOR3D_X, 360 * unit("degrees"), ZERO_POINT3D)
 design.plot()
 
-scdocx_location = design.export_to_scdocx()
-print(f"design saved to {scdocx_location}")
+scdocx_locaion = design.export_to_scdocx()
+print(f"design saved to {scdocx_locaion}")
 
 modeler.close()
 

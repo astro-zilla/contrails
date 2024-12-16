@@ -1,5 +1,6 @@
 import matplotlib
 import numpy as np
+from scipy.optimize import root_scalar
 from flightcondition import FlightCondition, unit
 from thermo import ChemicalConstantsPackage, CEOSGas, PRMIX, CEOSLiquid, FlashVL
 from thermo.interaction_parameters import IPDB
@@ -30,21 +31,22 @@ eta_f = 0.92345
 eta_t = 0.9
 
 r_pf = 1.4398
-r_pc = 42 / r_pf # PW1100G
+r_pc = 42 / r_pf  # PW1100G
 r_pt = np.nan
 Vjb_Vjc = 0.8
 
-BPR = 12.5 # PW1100G
-D = (81 * unit('in')).to('m') # PW1100G
-sfc_cruise_des = 0.0144 * unit('kg/kN/s') # PW1100G
-LD = 18 # A320
-L = 55000 * 0.00981 * unit('kN') # A320
+BPR = 12.5  # PW1100G
+D = (81 * unit('in')).to('m')  # PW1100G
+Af = 3.013 * unit('m^2')  # PW1100G from nacelle.py
+sfc_cruise_des = 0.0144 * unit('kg/kN/s')  # PW1100G
+LD = 18  # A320
+L = 55000 * 0.00981 * unit('kN')  # A320
 F_cruise_des = L / LD / 2
 mdotf = sfc_cruise_des * F_cruise_des
-LCV_fuel = 43.2 * unit('MJ/kg') # Jet A-1
-C_f = 10.8 # Jet A-1
-H_f = 21.6 # Jet A-1
-M_f = 151.9 # Jet A-1
+LCV_fuel = 43.2 * unit('MJ/kg')  # Jet A-1
+C_f = 10.8  # Jet A-1
+H_f = 21.6  # Jet A-1
+M_f = 151.9  # Jet A-1
 M_H2O = 18.02
 M_CO2 = 44.01
 M_N2 = 28.01
@@ -129,13 +131,21 @@ print(T04, T05, T5, T03 ** 2 / T02)
 print(f"{r_pt=}\n")
 
 Mjc = Vjc / np.sqrt(gam_e * R * T5)
-print(Mjc)
 
 Ab = mdotb * np.sqrt(cP_a * T03b) / 1.281 / p03b
 Ac = mdotc * np.sqrt(cP_e * T05) / (
-            gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / condition.p
+        gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / condition.p
 
-r = np.linspace(0.00000001*unit('m'), D / 2)
+
+fm = (mdotb + mdotc) * np.sqrt(cP_a * T01) / Af / p01
+def f(M):
+    return fm - gam_a / np.sqrt(gam_a - 1) * M * (1 + (gam_a - 1) / 2 * M ** 2) ** (-0.5 * (gam_a + 1) / (gam_a - 1))
+
+M2 = root_scalar(f, bracket=[0.1, 0.5]).root
+p2 = p01 * (1 + (gam_a - 1) / 2 * M2 ** 2) ** -(gam_a / (gam_a - 1))
+print(f"{M2 = :f}, {p2 = :f}")
+
+r = np.linspace(0.00000001 * unit('m'), D / 2)
 b_annulus_t = Ab / 2 / np.pi / r
 c_annulus_t = Ac / 2 / np.pi / r
 
@@ -151,9 +161,11 @@ print(f"BYPASS:\n"
       f"h05 = {h05.to('kJ/kg')}\n"
       f"Ac = {Ac.to_base_units():.3f}\n")
 
-print((mdotc*p05+mdotb*p03b)/(mdotc+mdotb))
-print((mdotc*h05+mdotb*(cP_a * (T02 - T01) + h01))/(mdotc+mdotb))
+print(f"TOTAL:\n"
+      f"mdot = {mdotc.to_base_units()} + {mdotb.to_base_units()} = {(mdotb + mdotc).to_base_units()}\n")
 
+print((mdotc * p05 + mdotb * p03b) / (mdotc + mdotb))
+print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
 
 # plt.plot(r, np.clip((r + b_annulus_t / 2).magnitude,0,(D/2).magnitude), color='blue', label='BYPASS')
 # plt.plot(r, np.clip((r - b_annulus_t / 2).magnitude, 0, (D/2).magnitude), color='blue')
