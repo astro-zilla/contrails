@@ -17,7 +17,7 @@ def cut_te(upper, lower):
     if u2.x > l2.x:
         interp_var = (l1.x - u2.x) / (l1.x - l2.x)
         lower[-1].x = upper[-2].x
-        lower[-1].y = interp_var * l2.y + (1-interp_var) * l1.y
+        lower[-1].y = interp_var * l2.y + (1 - interp_var) * l1.y
         upper[-1] = lower[-1]
     else:
         interp_var = (u1.x - l2.x) / (u1.x - u2.x)
@@ -25,6 +25,20 @@ def cut_te(upper, lower):
         upper[-1].y = interp_var * u2.y + (1 - interp_var) * u1.y
         lower[-1] = upper[-1]
 
+
+def move_pt(path, index, pos):
+    delta = pos - path[index].start
+    path[index].start += delta
+    path[index].control1 += delta
+    path[index - 1].control2 += delta
+    path[index - 1].end += delta
+
+def move_path(path, delta):
+    for seg in path:
+        seg.start += delta
+        seg.control1 += delta
+        seg.control2 += delta
+        seg.end += delta
 
 
 # get bsplines traced from my very specific SVG. not portable, not generalised, terrible coding practice
@@ -43,11 +57,38 @@ lines = {"nacelle": [],
          "tail_zero_rad": [],
          "nosecone": []}
 
-Dfan = 81*unit('in').to_base_units()
+Dfan = 81 * unit('in').to_base_units()
 print(f"{Dfan = :f}")
-scale = abs((Dfan/2/(paths[7][0].poly()(0).imag-paths[6][0].poly()(0).imag)).magnitude)
+scale = abs((Dfan / 2 / (paths[7][0].poly()(0).imag - paths[6][0].poly()(0).imag)).magnitude)
 print(f"{scale = :f}")
-print(paths)
+
+inner = paths[2][1].start
+outer = paths[1][-1].end
+y0_raw = paths[6][0].start.imag
+
+l0 = abs(outer - inner)
+dr_dl = abs(outer.imag-inner.imag) / l0
+r1 = abs(outer.imag - y0_raw)
+
+Ab_des = 1.878 / scale / scale
+Ac_des = 0.265 / scale / scale
+
+a = np.pi*dr_dl
+b = -2*np.pi*r1
+c = Ab_des
+l = (-b - np.sqrt(b**2 - 4*a*c))/(2*a)
+
+move_pt(paths[2], 1, inner * l / l0 + outer * (1 - l / l0))
+Ab=scale**2*np.pi*(r1+abs(paths[2][1].start.imag-y0_raw))*l
+
+r_core_inner = np.sqrt(abs(paths[4][-1].end.imag-y0_raw)**2-Ac_des/np.pi)
+delta = (r_core_inner - abs(paths[5][0].start.imag-y0_raw))*complex(0,-1)
+move_path(paths[5],delta)
+paths[5][-1].end -= delta
+paths[5][-1].control2 -= delta
+paths[4][0].start += delta
+
+
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 10)
 colors = [c for c in TABLEAU_COLORS.values()] + ['black']
@@ -76,24 +117,22 @@ lines["core_tail_outer"][0] = lines["core_iface"][-1]
 lines["core_tail_inner"][0] = lines["core_iface"][0]
 lines["core_tail_inner"][-1] = lines["tail_zero_rad"][0]
 
-y0 = lines["centreline"][-1].y.magnitude
-Ab = np.pi*((lines["bypass_iface"][0].y.magnitude-y0)**2-(lines["bypass_iface"][-1].y.magnitude-y0)**2)*unit('m^2')
-Ac = np.pi*((lines["core_iface"][-1].y.magnitude-y0)**2-(lines["core_iface"][0].y.magnitude-y0)**2)*unit('m^2')
-# POWER OF 10
-print(f"{Ab = }, {Ac = }")
 y0 = lines["centreline"][0].y.magnitude
-Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude-y0)**2-(lines["bypass_iface"][-1].y.magnitude-y0)**2)
-Ac = np.pi * ((lines["core_iface"][-1].y.magnitude-y0)**2-(lines["core_iface"][0].y.magnitude-y0)**2)
-Af = np.pi * ((lines["fan_iface"][0].y.magnitude-y0)**2-(lines["fan_iface"][-1].y.magnitude-y0)**2)
+Ac = np.pi * ((lines["core_iface"][-1].y.magnitude - y0) ** 2 - (lines["core_iface"][0].y.magnitude - y0) ** 2)
+Af = np.pi * ((lines["fan_iface"][0].y.magnitude - y0) ** 2 - (lines["fan_iface"][-1].y.magnitude - y0) ** 2)
 print(f"{Ab = :f}\n{Ac = :f}\n{Af = :f}")
 
 for i, key in enumerate(lines.keys()):
-    plt.plot([point.x.magnitude for point in lines[key]], [point.y.magnitude for point in lines[key]], '-', label=key, color=colors[i])
-plt.legend(loc="upper right")
+    plt.plot([point.x.magnitude for point in lines[key]], [point.y.magnitude for point in lines[key]], '-', label=key,
+             color=colors[i])
+# plt.legend(loc="upper right")
+figmgr = plt.get_current_fig_manager()
+# figmgr.resize(*figmgr.window.maxsize())
+# figmgr.full_screen_toggle()
+# figmgr.window.state('zoomed')
 plt.axis("equal")
-plt.ylim(1.6,2.4)
 plt.show()
-exit()
+
 # draw lines in sketch segment by segment
 sketch = Sketch()
 for key in lines.keys():

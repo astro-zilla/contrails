@@ -30,7 +30,8 @@ eta_c = 0.85
 eta_f = 0.92345
 eta_t = 0.9
 
-r_pf = 1.4398
+# r_pf = 1.4398
+r_pf = 1.27
 r_pc = 42 / r_pf  # PW1100G
 r_pt = np.nan
 Vjb_Vjc = 0.8
@@ -133,23 +134,36 @@ print(f"{r_pt=}\n")
 Mjc = Vjc / np.sqrt(gam_e * R * T5)
 
 Ab = mdotb * np.sqrt(cP_a * T03b) / 1.281 / p03b
+p_ce = condition.q_c*0.7+condition.p
 Ac = mdotc * np.sqrt(cP_e * T05) / (
-        gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / condition.p
+        gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / p_ce
 
-
+# get choke area for fan and check it is smaller than actual area
+Afstar = (mdotb + mdotc) * np.sqrt(cP_a * T01) / 1.281 / p01
+if (Afstar > Af):
+      raise(Exception(f"Inlet choked!: Af = {Af.to_base_units():.3f}, Afstar = {Afstar.to_base_units():.3f}"))
 fm = (mdotb + mdotc) * np.sqrt(cP_a * T01) / Af / p01
+fm = fm.to_base_units()
+print(fm)
 def f(M):
     return fm - gam_a / np.sqrt(gam_a - 1) * M * (1 + (gam_a - 1) / 2 * M ** 2) ** (-0.5 * (gam_a + 1) / (gam_a - 1))
 
-M2 = root_scalar(f, bracket=[0.1, 0.5]).root
+M2 = root_scalar(f, bracket=[0, 1]).root
 p2 = p01 * (1 + (gam_a - 1) / 2 * M2 ** 2) ** -(gam_a / (gam_a - 1))
-print(f"{M2 = :f}, {p2 = :f}")
+V2 = M2 * np.sqrt(gam_a*R*condition.T)
+N1 = 0.8
+RPMFAN = 3281 * unit('rpm')
+U2 = (N1 * RPMFAN * D/2).to_base_units()
+print(U2)
+# p2=0*unit('kPa')
+# print(f"{M2 = :f}\np2 = {p2.to('kPa'):f}")
 
 r = np.linspace(0.00000001 * unit('m'), D / 2)
 b_annulus_t = Ab / 2 / np.pi / r
 c_annulus_t = Ac / 2 / np.pi / r
 
 # r = [0.4,0.74]
+# phi is 0.6
 
 print(f"BYPASS:\n"
       f"p03b = {p03b.to('kPa'):.3f}\n"
@@ -161,17 +175,19 @@ print(f"BYPASS:\n"
       f"h05 = {h05.to('kJ/kg')}\n"
       f"Ac = {Ac.to_base_units():.3f}\n")
 
+print(f"INTAKE:\n"
+      f"M2 = {M2:.3f}\n"
+      f"p2 = {p2.to('kPa'):.3f}\n"
+      f"V2 = {V2:.3f}\n"
+      f"phi2 = {V2/U2:.3f}\n")
+
 print(f"TOTAL:\n"
-      f"mdot = {mdotc.to_base_units()} + {mdotb.to_base_units()} = {(mdotb + mdotc).to_base_units()}\n")
+      f"mdot = {mdotc.to_base_units()} + {mdotb.to_base_units()} = {(mdotb + mdotc).to_base_units()}\n"
+      f"F = {F_cruise_des.to('kN'):.3f}")
 
 print((mdotc * p05 + mdotb * p03b) / (mdotc + mdotb))
 print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
 
-# plt.plot(r, np.clip((r + b_annulus_t / 2).magnitude,0,(D/2).magnitude), color='blue', label='BYPASS')
-# plt.plot(r, np.clip((r - b_annulus_t / 2).magnitude, 0, (D/2).magnitude), color='blue')
-# plt.plot(r, np.clip((r + c_annulus_t / 2).magnitude,0,(D/2).magnitude), color='red', label='CORE')
-# plt.plot(r, np.clip((r - c_annulus_t / 2).magnitude, 0, (D/2).magnitude), color='red')
-# plt.legend()
-# plt.xlabel('$r$ [m]')
-# plt.ylabel('annulus extent [m]')
-# plt.show()
+Cdf =  219.3/220.1
+Cdb = 207.9/205.6
+Cdc = 25/16.4
