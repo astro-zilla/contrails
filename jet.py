@@ -120,13 +120,16 @@ zs = [wtH2O, wtCO2, wtO2, wtN2]
 T04 = flasher.flash(H_mass=h04.magnitude, P=p04.magnitude, zs=zs).T * unit('K')
 
 h05 = h04 - wc - wcore
+
 T05 = flasher.flash(H_mass=h05.magnitude, P=p04.magnitude, zs=zs).T * unit('K')
 r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / eta_t)
 p05 = p04 / r_pt
-ST05 = flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs).T * unit('K')
-T5 = T05 - 0.5 / cP_e * Vjb ** 2
+
+T05 = flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs).T * unit('K')
 r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / eta_t)
 p05 = p04 / r_pt
+
+T5 = T05 - 0.5 / cP_e * Vjb ** 2
 
 print(T04, T05, T5, T03 ** 2 / T02)
 print(f"{r_pt=}\n")
@@ -148,15 +151,13 @@ print(fm)
 def f(M):
     return fm - gam_a / np.sqrt(gam_a - 1) * M * (1 + (gam_a - 1) / 2 * M ** 2) ** (-0.5 * (gam_a + 1) / (gam_a - 1))
 
+
 M2 = root_scalar(f, bracket=[0, 1]).root
 p2 = p01 * (1 + (gam_a - 1) / 2 * M2 ** 2) ** -(gam_a / (gam_a - 1))
 V2 = M2 * np.sqrt(gam_a*R*condition.T)
 N1 = 0.8
-RPMFAN = 3281 * unit('rpm')
+RPMFAN = 3281 * unit('2*pi/minute')
 U2 = (N1 * RPMFAN * D/2).to_base_units()
-print(U2)
-# p2=0*unit('kPa')
-# print(f"{M2 = :f}\np2 = {p2.to('kPa'):f}")
 
 r = np.linspace(0.00000001 * unit('m'), D / 2)
 b_annulus_t = Ab / 2 / np.pi / r
@@ -165,25 +166,28 @@ c_annulus_t = Ac / 2 / np.pi / r
 # r = [0.4,0.74]
 # phi is 0.6
 
-print(f"BYPASS:\n"
-      f"p03b = {p03b.to('kPa'):.3f}\n"
-      f"h03b = {(cP_a * (T02 - T01) + h01).to('kJ/kg')}\n"
-      f"Ab = {Ab.to_base_units():.3f}\n"
-      f"\nCORE:\n"
-      f"wH2O = {wtH2O:.5f}\n"
-      f"p05 = {p05.to('kPa'):.3f}\n"
-      f"h05 = {h05.to('kJ/kg')}\n"
-      f"Ac = {Ac.to_base_units():.3f}\n")
+print(f"""
+BYPASS:
+  p03b = {p03b.to("kPa"):.5g~P}
+  h03b = {(cP_a * (T02 - T01) + h01).to("kJ/kg"):.5g~P}
+  Ab = {Ab.to_base_units():.5g~P}
+  
+CORE:
+  wH2O = {wtH2O:.5g}
+  p05 = {p05.to("kPa"):.5g~P}
+  h05 = {h05.to("kJ/kg"):.5g~P}
+  Ac = {Ac.to_base_units():.5g~P}
 
-print(f"INTAKE:\n"
-      f"M2 = {M2:.3f}\n"
-      f"p2 = {p2.to('kPa'):.3f}\n"
-      f"V2 = {V2:.3f}\n"
-      f"phi2 = {V2/U2:.3f}\n")
+INTAKE:
+  M2 = {M2:.5g}
+  p2 = {p2.to("kPa"):.5g~P}
+  V2 = {V2:.5g~P}
+  phi2 = {(V2 / U2).magnitude:.5g}
 
-print(f"TOTAL:\n"
-      f"mdot = {mdotc.to_base_units()} + {mdotb.to_base_units()} = {(mdotb + mdotc).to_base_units()}\n"
-      f"F = {F_cruise_des.to('kN'):.3f}")
+TOTAL:
+  mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
+  F = {F_cruise_des.to("kN"):.5g~P}
+""")
 
 print((mdotc * p05 + mdotb * p03b) / (mdotc + mdotb))
 print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
@@ -191,3 +195,5 @@ print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
 Cdf =  219.3/220.1
 Cdb = 207.9/205.6
 Cdc = 25/16.4
+
+# give bypass ratio and fan area in filename so paraview script can run jet with correct params
