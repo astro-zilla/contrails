@@ -34,6 +34,12 @@ def move_pt(line, seg_idx, pos):
     line[seg_idx].start += delta
     line[seg_idx].control1 += delta
 
+def move_path(path, delta):
+    for seg in path:
+        seg.start += delta
+        seg.control1 += delta
+        seg.control2 += delta
+        seg.end += delta
 
 # get bsplines traced from my very specific SVG. not portable, not generalised, terrible coding practice
 paths, attributes = svg2paths("exhaust_traced.svg")
@@ -93,6 +99,12 @@ t = l / l0
 print(f"{t = :f}")
 move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
 
+r_core_inner = np.sqrt(abs(paths[4][-1].end.imag-y0*scale)**2-Ac_des/np.pi)
+delta = (r_core_inner - abs(paths[5][0].start.imag-y0*scale))*complex(0,-1)
+move_path(paths[5],delta)
+paths[5][-1].end -= delta
+paths[5][-1].control2 -= delta
+paths[4][0].start += delta
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 1000)
 colors = [c for c in TABLEAU_COLORS.values()] + ['black']

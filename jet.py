@@ -150,15 +150,34 @@ class JetCondition:
         b_annulus_t = self.Ab / 2 / np.pi / r
         c_annulus_t = self.Ac / 2 / np.pi / r
 
-        print(f"BYPASS:\n"
-              f"p03b = {p03b.to('kPa'):.3f}\n"
-              f"h03b = {(cP_a * (T02 - T01) + h01).to('kJ/kg')}\n"
-              f"Ab = {self.Ab.to_base_units():.3f}\n"
-              f"\nCORE:\n"
-              f"wH2O = {wtH2O:.5f}\n"
-              f"p05 = {p05.to('kPa'):.3f}\n"
-              f"h05 = {h05.to('kJ/kg')}\n"
-              f"Ac = {self.Ac.to_base_units():.3f}\n")
+print(f"""
+BYPASS:
+  p03b = {p03b.to("kPa"):.5g~P}
+  h03b = {(cP_a * (T02 - T01) + h01).to("kJ/kg"):.5g~P}
+  Ab = {Ab.to_base_units():.5g~P}
+  
+CORE:
+  wH2O = {wtH2O:.5g}
+  p05 = {p05.to("kPa"):.5g~P}
+  h05 = {h05.to("kJ/kg"):.5g~P}
+  Ac = {Ac.to_base_units():.5g~P}
 
-        print((mdotc * p05 + mdotb * p03b) / (mdotc + mdotb))
-        print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
+INTAKE:
+  M2 = {M2:.5g}
+  p2 = {p2.to("kPa"):.5g~P}
+  V2 = {V2:.5g~P}
+  phi2 = {(V2 / U2).magnitude:.5g}
+
+TOTAL:
+  mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
+  F = {F_cruise_des.to("kN"):.5g~P}
+""")
+
+print((mdotc * p05 + mdotb * p03b) / (mdotc + mdotb))
+print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
+
+Cdf =  219.3/220.1
+Cdb = 207.9/205.6
+Cdc = 25/16.4
+
+# give bypass ratio and fan area in filename so paraview script can run jet with correct params
