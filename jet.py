@@ -43,6 +43,7 @@ class JetCondition:
 
         # gas properties
         R = 287 * unit('m^2/s^2/K')
+        # this could be done with the EOS
         gam_a = 1.4
         cP_a = 1005 * unit('kg.m^2/s^2/kg/K')
         gam_e = 1.31
