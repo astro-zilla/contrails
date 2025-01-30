@@ -7,6 +7,7 @@ from thermo import ChemicalConstantsPackage, CEOSGas, PRMIX, CEOSLiquid, FlashVL
 from thermo.interaction_parameters import IPDB
 import matplotlib.pyplot as plt
 from svgpathtools import parse_path, svg2paths
+from scipy.optimize import root_scalar
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Engine:
 
     r_pf: float
     r_po: float
+    N1: float
     Vjb_Vjc: float
 
     @property
@@ -29,9 +31,10 @@ class Engine:
 
 
 class JetCondition:
-    def __init__(self, flight_condition, engine):
+    def __init__(self, flight_condition, engine, Af):
         self.fc = flight_condition
         self.engine = engine
+        self.Af = Af
 
         # chemistry
         constants, properties = ChemicalConstantsPackage.from_IDs(['water', 'carbon dioxide', 'oxygen', 'nitrogen'])
@@ -50,7 +53,7 @@ class JetCondition:
         cP_e = 830 * unit('kg.m^2/s^2/kg/K')
 
         LD = 18  # A320
-        L = 60000 * 0.00981 * unit('kN')  # A320
+        L = 55000 * 0.00981 * unit('kN')  # A320
         F_cruise_des = L / LD / 2
         mdotf = self.engine.sfc_cruise * F_cruise_des
         LCV_fuel = 43.2 * unit('MJ/kg')  # Jet A-1
@@ -101,7 +104,7 @@ class JetCondition:
 
         tc = (Vjc - Vf)
 
-        mdotc = F_cruise_des / (tc + self.engine.BPR * tb)
+        mdotc = (F_cruise_des / (tc + self.engine.BPR * tb)).to_base_units()
         mdotb = mdotc * self.engine.BPR
 
         p04 = 0.99 * p03
@@ -147,38 +150,41 @@ class JetCondition:
         self.Ac = mdotc * np.sqrt(cP_e * T05) / (
                 gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / self.fc.p
 
-        r = np.linspace(0.00000001 * unit('m'), engine.D / 2)
-        b_annulus_t = self.Ab / 2 / np.pi / r
-        c_annulus_t = self.Ac / 2 / np.pi / r
+        f = (mdotb + mdotc) * np.sqrt(cP_a * T01) / self.Af / p01
+        print(f"{f = }, {mdotb + mdotc = }, {cP_a = }, {T01 = }, {Af = }, {p01 = }")
 
-print(f"""
-BYPASS:
-  p03b = {p03b.to("kPa"):.5g~P}
-  h03b = {(cP_a * (T02 - T01) + h01).to("kJ/kg"):.5g~P}
-  Ab = {Ab.to_base_units():.5g~P}
-  
-CORE:
-  wH2O = {wtH2O:.5g}
-  p05 = {p05.to("kPa"):.5g~P}
-  h05 = {h05.to("kJ/kg"):.5g~P}
-  Ac = {Ac.to_base_units():.5g~P}
+        def f0(M, ga):
+            return f-ga / np.sqrt(ga - 1) * M * (1 + (ga - 1) / 2 * M ** 2) ** (-0.5 * (ga + 1) / (ga - 1))
 
-INTAKE:
-  M2 = {M2:.5g}
-  p2 = {p2.to("kPa"):.5g~P}
-  V2 = {V2:.5g~P}
-  phi2 = {(V2 / U2).magnitude:.5g}
+        M2 = root_scalar(f0, (gam_a,), bracket=[0, 1]).root
+        p2 = p01*(1+(gam_a-1)/2*M2**2)**-(gam_a/(gam_a-1))
+        V2 = np.sqrt(cP_a*T01)*(gam_a-1)*M2*(1+(gam_a-1)/2*M2**2)**-0.5
+        U2 = self.engine.N1.to_base_units() * self.engine.D/2
 
-TOTAL:
-  mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
-  F = {F_cruise_des.to("kN"):.5g~P}
-""")
 
-print((mdotc * p05 + mdotb * p03b) / (mdotc + mdotb))
-print((mdotc * h05 + mdotb * (cP_a * (T02 - T01) + h01)) / (mdotc + mdotb))
+        print(f"""
+        BYPASS:
+          p03b = {p03b.to("kPa"):.5g~P}
+          h03b = {(cP_a * (T02 - T01) + h01).to("kJ/kg"):.5g~P}
+          Ab = {self.Ab.to_base_units():.5g~P}
+          
+        CORE:
+          wH2O = {wtH2O:.5g}
+          p05 = {p05.to("kPa"):.5g~P}
+          h05 = {h05.to("kJ/kg"):.5g~P}
+          Ac = {self.Ac.to_base_units():.5g~P}
+        
+        INTAKE:
+          M2 = {M2:.5g}
+          p2 = {p2.to("kPa"):.5g~P}
+          V2 = {V2: .5g~P}
+          U2 = {U2:.5g~P}
+          phi2 = {(V2 / U2).magnitude: .5g}
+        
+        TOTAL:
+          mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
+          F = {F_cruise_des.to("kN"):.5g~P}
+        """)
 
-Cdf =  219.3/220.1
-Cdb = 207.9/205.6
-Cdc = 25/16.4
 
 # give bypass ratio and fan area in filename so paraview script can run jet with correct params

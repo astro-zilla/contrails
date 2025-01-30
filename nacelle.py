@@ -34,12 +34,14 @@ def move_pt(line, seg_idx, pos):
     line[seg_idx].start += delta
     line[seg_idx].control1 += delta
 
+
 def move_path(path, delta):
     for seg in path:
         seg.start += delta
         seg.control1 += delta
         seg.control2 += delta
         seg.end += delta
+
 
 # get bsplines traced from my very specific SVG. not portable, not generalised, terrible coding practice
 paths, attributes = svg2paths("exhaust_traced.svg")
@@ -63,33 +65,36 @@ y0 = paths[6][0].start.imag
 PW1100G = Engine(D=(81 * unit('in')).to('m'), BPR=12.5,
                  sfc_cruise=0.0144 * unit('kg/kN/s'),
                  eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                 r_pf=1.2, r_po=37, # 42
+                 r_pf=1.22, r_po=37, N1=0.85*3281*unit('2*pi/min'),  # 42
                  Vjb_Vjc=0.8)
 
 LEAP1A = Engine(D=(78 * unit('in')).to('m'), BPR=11,
                 sfc_cruise=0.0144 * unit('kg/kN/s'),
                 eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                r_pf=1.22, r_po=35, # 40
+                r_pf=1.24, r_po=35, N1=0.85*3894*unit('2*pi/min'), # 40
                 Vjb_Vjc=0.8)
 
+engine = LEAP1A
+
+scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude) * unit('m')
+Af = np.pi * (((paths[0][0].start.imag-y0) * scale) ** 2 - ((paths[10][0].start.imag-y0) * scale) ** 2)
+
+print(f"{engine.D = :f}\n"
+      f"{scale = :f}\n"
+      f"{Af = :f}")
+
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
-jet = JetCondition(condition, LEAP1A)
-# Ab_des = 2.449
-# Ac_des = 0.446
+jet = JetCondition(condition, engine, Af)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
-
-scale = abs((jet.engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude)
-print(f"{jet.engine.D = :f}\n"
-      f"{scale = :f}")
 
 # outer radius stays same
 outer = scale * paths[1][0].end
 inner = scale * paths[2][1].start
-l0 = abs(outer - inner) * unit('m')
+l0 = abs(outer - inner)
 # inner control point follows straight line from inital point to outside te
-rb_outer = abs(outer.imag - y0 * scale) * unit('m')
-delta_rb_l = abs(outer.imag - inner.imag) / l0 * unit('m')
+rb_outer = abs(outer.imag - y0 * scale)
+delta_rb_l = abs(outer.imag - inner.imag) / l0
 
 # A = np.pi*(rb_outer+l0*rb_inner_l)*l0
 # by quadratic formula
@@ -99,9 +104,9 @@ t = l / l0
 print(f"{t = :f}")
 move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
 
-r_core_inner = np.sqrt(abs(paths[4][-1].end.imag-y0*scale)**2-Ac_des/np.pi)
-delta = (r_core_inner - abs(paths[5][0].start.imag-y0*scale))*complex(0,-1)
-move_path(paths[5],delta)
+r_core_inner = np.sqrt(abs((paths[4][-1].end.imag - y0) * scale) ** 2 - Ac_des / np.pi)
+delta = (r_core_inner - abs((paths[5][0].start.imag - y0) * scale))/scale * complex(0, -1)
+move_path(paths[5], delta)
 paths[5][-1].end -= delta
 paths[5][-1].control2 -= delta
 paths[4][0].start += delta
@@ -111,7 +116,7 @@ colors = [c for c in TABLEAU_COLORS.values()] + ['black']
 for i, key in enumerate(lines.keys()):
     for j, segment in enumerate(paths[i]):
         pts = scale * segment.poly()(t[j > 0:])
-        [lines[key].append(Point2D(pt)) for pt in zip(pts.real, pts.imag)]
+        [lines[key].append(Point2D(pt)) for pt in zip(pts.real.magnitude, pts.imag.magnitude)]
 # core tail outer needs reversing to match syntax: x increasing
 lines["core_tail_outer"] = lines["core_tail_outer"][::-1]
 
@@ -134,14 +139,18 @@ lines["core_tail_inner"][0] = lines["core_iface"][0]
 lines["core_tail_inner"][-1] = lines["tail_zero_rad"][0]
 
 y0 = lines["centreline"][0].y.magnitude
-Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude - y0) ** 2 - (lines["bypass_iface"][-1].y.magnitude - y0) ** 2)
-Ac = np.pi * ((lines["core_iface"][-1].y.magnitude - y0) ** 2 - (lines["core_iface"][0].y.magnitude - y0) ** 2)
-print(f"{Ab = :f}\n{Ac = :f}")
-
-for i, key in enumerate(lines.keys()):
-    plt.plot([point.x.magnitude for point in lines[key]], [y0 - point.y.magnitude for point in lines[key]], '-', label=key,
-             color='black')
-    # color=colors[i])
+# Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude - y0) ** 2 - (lines["bypass_iface"][-1].y.magnitude - y0) ** 2)
+# Ac = np.pi * ((lines["core_iface"][-1].y.magnitude - y0) ** 2 - (lines["core_iface"][0].y.magnitude - y0) ** 2)
+# print(f"{Ab = :f}\n{Ac = :f}")
+with open("lines.txt", "w") as f:
+    f.write(f'3d=true\nfit=true\n')
+    for i, key in enumerate(lines.keys()):
+        plt.plot([point.x.magnitude for point in lines[key]], [y0 - point.y.magnitude for point in lines[key]], '-', label=key,
+                 color='black')
+        for point in lines[key]:
+            f.write(f'{point.x.magnitude} {point.y.magnitude-y0} 0\n')
+        f.write('\n')
+        # color=colors[i])
 # plt.legend(loc="upper right")
 
 plt.ylim(-1.5, 2.8)
