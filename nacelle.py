@@ -13,6 +13,7 @@ print(f"PyAnsys Geometry version: {__version__}")
 
 
 def cut_te(upper, lower):
+    del upper[-5:-1], lower[-5:-1]
     u2, u1 = upper[-2:]
     l2, l1 = lower[-2:]
     if u2.x > l2.x:
@@ -20,11 +21,13 @@ def cut_te(upper, lower):
         lower[-1].x = upper[-2].x
         lower[-1].y = interp_var * l2.y + (1 - interp_var) * l1.y
         upper[-1] = lower[-1]
+        return 0
     else:
         interp_var = (u1.x - l2.x) / (u1.x - u2.x)
         upper[-1].x = lower[-2].x
         upper[-1].y = interp_var * u2.y + (1 - interp_var) * u1.y
         lower[-1] = upper[-1]
+        return 1
 
 
 def move_pt(line, seg_idx, pos):
@@ -65,25 +68,26 @@ y0 = paths[6][0].start.imag
 PW1100G = Engine(D=(81 * unit('in')).to('m'), BPR=12.5,
                  sfc_cruise=0.0144 * unit('kg/kN/s'),
                  eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                 r_pf=1.22, r_po=37, N1=0.85*3281*unit('2*pi/min'),  # 42
+                 r_pf=1.22, r_po=37, N1=0.85 * 3281 * unit('2*pi/min'),  # 42
                  Vjb_Vjc=0.8)
 
 LEAP1A = Engine(D=(78 * unit('in')).to('m'), BPR=11,
                 sfc_cruise=0.0144 * unit('kg/kN/s'),
                 eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                r_pf=1.24, r_po=35, N1=0.85*3894*unit('2*pi/min'), # 40
+                r_pf=1.24, r_po=35, N1=0.85 * 3894 * unit('2*pi/min'),  # 40
                 Vjb_Vjc=0.8)
 
 engine = LEAP1A
 
 scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude) * unit('m')
-Af = np.pi * (((paths[0][0].start.imag-y0) * scale) ** 2 - ((paths[10][0].start.imag-y0) * scale) ** 2)
+Af = np.pi * (((paths[0][0].start.imag - y0) * scale) ** 2 - ((paths[10][0].start.imag - y0) * scale) ** 2)
 
 print(f"{engine.D = :f}\n"
       f"{scale = :f}\n"
       f"{Af = :f}")
 
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
+print(condition)
 jet = JetCondition(condition, engine, Af)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
@@ -105,13 +109,13 @@ print(f"{t = :f}")
 move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
 
 r_core_inner = np.sqrt(abs((paths[4][-1].end.imag - y0) * scale) ** 2 - Ac_des / np.pi)
-delta = (r_core_inner - abs((paths[5][0].start.imag - y0) * scale))/scale * complex(0, -1)
+delta = (r_core_inner - abs((paths[5][0].start.imag - y0) * scale)) / scale * complex(0, -1)
 move_path(paths[5], delta)
 paths[5][-1].end -= delta
 paths[5][-1].control2 -= delta
 paths[4][0].start += delta
 # interpolate through splines, 10 samples per spline segment
-t = np.linspace(0, 1, 1000)
+t = np.linspace(0, 1, 100)
 colors = [c for c in TABLEAU_COLORS.values()] + ['black']
 for i, key in enumerate(lines.keys()):
     for j, segment in enumerate(paths[i]):
@@ -119,24 +123,32 @@ for i, key in enumerate(lines.keys()):
         [lines[key].append(Point2D(pt)) for pt in zip(pts.real.magnitude, pts.imag.magnitude)]
 # core tail outer needs reversing to match syntax: x increasing
 lines["core_tail_outer"] = lines["core_tail_outer"][::-1]
-
+tedges = []
 # ensure closed profile by matching points
-lines["nosecone"][0] = lines["fan_iface"][-1]
+lines["nosecone"][0].x = lines["fan_iface"][-1].x
+lines["fan_iface"][-1] = lines["nosecone"][0]
 
-lines["nacelle"][0] = lines["fan_iface"][0]
+lines["nacelle"][0].x = lines["fan_iface"][0].x
+lines["fan_iface"][0] = lines["nacelle"][0]
 # te
-cut_te(lines["nacelle"], lines["bypass_tail_outer"])
+tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"])])
 # lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
-lines["bypass_tail_outer"][0] = lines["bypass_iface"][0]
+lines["bypass_tail_outer"][0].x = lines["bypass_iface"][0].x
+lines["bypass_iface"][0] = lines["bypass_tail_outer"][0]
 
-lines["bypass_tail_inner"][0] = lines["bypass_iface"][-1]
+lines["bypass_tail_inner"][0].x = lines["bypass_iface"][-1].x
+lines["bypass_iface"][-1] = lines["bypass_tail_inner"][0]
 # te
-cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"])
+tedges.append(["bypass_tail_inner", "core_tail_outer"][cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"])])
 # lines["bypass_tail_inner"][-1] = lines["core_tail_outer"][-1]
-lines["core_tail_outer"][0] = lines["core_iface"][-1]
+lines["core_tail_outer"][0].x = lines["core_iface"][-1].x
+lines["core_iface"][-1] = lines["core_tail_outer"][0]
 
-lines["core_tail_inner"][0] = lines["core_iface"][0]
-lines["core_tail_inner"][-1] = lines["tail_zero_rad"][0]
+lines["core_tail_inner"][0].x = lines["core_iface"][0].x
+lines["core_iface"][0] = lines["core_tail_inner"][0]
+
+lines["core_tail_inner"][-1].x = lines["tail_zero_rad"][0].x
+lines["tail_zero_rad"][0] = lines["core_tail_inner"][-1]
 
 y0 = lines["centreline"][0].y.magnitude
 # Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude - y0) ** 2 - (lines["bypass_iface"][-1].y.magnitude - y0) ** 2)
@@ -145,10 +157,15 @@ y0 = lines["centreline"][0].y.magnitude
 with open("lines.txt", "w") as f:
     f.write(f'3d=true\nfit=true\n')
     for i, key in enumerate(lines.keys()):
-        plt.plot([point.x.magnitude for point in lines[key]], [y0 - point.y.magnitude for point in lines[key]], '-', label=key,
+        plt.plot([point.x.magnitude for point in lines[key]], [y0 - point.y.magnitude for point in lines[key]], '-',
+                 label=key,
                  color='black')
-        for point in lines[key]:
-            f.write(f'{point.x.magnitude} {point.y.magnitude-y0} 0\n')
+        for point in lines[key][:-1]:
+            f.write(f'{1000*point.x.magnitude} {1000*point.y.magnitude - 1000*y0} 0\n')
+        if key in tedges:
+            f.write(f'\n{1000*lines[key][-2].x.magnitude} {1000*lines[key][-2].y.magnitude - 1000*y0} 0\n')
+        f.write(f'{1000*lines[key][-1].x.magnitude} {1000*lines[key][-1].y.magnitude - 1000*y0} 0\n')
+
         f.write('\n')
         # color=colors[i])
 # plt.legend(loc="upper right")
