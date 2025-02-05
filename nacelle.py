@@ -77,7 +77,7 @@ LEAP1A = Engine(D=(78 * unit('in')).to('m'), BPR=11,
                 r_pf=1.24, r_po=35, N1=0.85 * 3894 * unit('2*pi/min'),  # 40
                 Vjb_Vjc=0.8)
 
-engine = LEAP1A
+engine = PW1100G
 
 scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude) * unit('m')
 Af = np.pi * (((paths[0][0].start.imag - y0) * scale) ** 2 - ((paths[10][0].start.imag - y0) * scale) ** 2)
@@ -161,10 +161,10 @@ with open("lines.txt", "w") as f:
                  label=key,
                  color='black')
         for point in lines[key][:-1]:
-            f.write(f'{1000*point.x.magnitude} {1000*point.y.magnitude - 1000*y0} 0\n')
+            f.write(f'0 {1000*point.x.magnitude} {1000*point.y.magnitude - 1000*y0}\n')
         if key in tedges:
-            f.write(f'\n{1000*lines[key][-2].x.magnitude} {1000*lines[key][-2].y.magnitude - 1000*y0} 0\n')
-        f.write(f'{1000*lines[key][-1].x.magnitude} {1000*lines[key][-1].y.magnitude - 1000*y0} 0\n')
+            f.write(f'\n0 {1000*lines[key][-2].x.magnitude} {1000*lines[key][-2].y.magnitude - 1000*y0}\n')
+        f.write(f'0 {1000*lines[key][-1].x.magnitude} {1000*lines[key][-1].y.magnitude - 1000*y0}\n')
 
         f.write('\n')
         # color=colors[i])

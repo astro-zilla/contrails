@@ -101,10 +101,11 @@
        id="path4563"
        inkscape:connector-curvature="0" />
     <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;stroke:#ff0000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m -90.4017,270.46967 c 0,0 7.349911,0.13363 9.15398,0.13363 1.804069,0 2.472243,0.20045 4.34313,0.73499 1.870887,0.53454 16.904798,6.08038 16.904798,6.08038"
+       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;stroke:#ff0000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m -90.4017,270.46967 c 0,0 5.613112,-0.0738 7.416728,-0.0334 7.586563,0.16996 13.31748,2.1252 22.98518,6.98241"
        id="path4564"
-       inkscape:connector-curvature="0" />
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="csc" />
     <path
        style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;stroke:#ff0000;stroke-width:0.26652443px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="M -228.46771,278.51698 H -59.999792"

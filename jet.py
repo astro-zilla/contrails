@@ -92,7 +92,7 @@ class JetCondition:
         # assume bypass is choked. 1/2Vjb^2 = cP(T03b-T3b) OR Vjb = sqrt(gam_a * R * T3b)
         Vjb = np.sqrt(2 * cP_a * (T03b - T3b))
         Vf = self.fc.TAS
-
+        print(p03b,p3b)
         tb = (Vjb - Vf + (p3b - pa) / (ro3b * Vjb))
 
         wfan = cP_a * (T02 - T01)
@@ -161,6 +161,10 @@ class JetCondition:
         V2 = np.sqrt(cP_a*T01)*(gam_a-1)*M2*(1+(gam_a-1)/2*M2**2)**-0.5
         U2 = self.engine.N1.to_base_units() * self.engine.D/2
 
+        Aj = self.Ab+self.Ac
+        rj = np.sqrt(Aj/(2*np.pi))
+        rc = np.sqrt(self.Ac/(2*np.pi))
+
 
         print(f"""
         BYPASS:
@@ -182,6 +186,8 @@ class JetCondition:
           phi2 = {(V2 / U2).magnitude: .5g}
         
         TOTAL:
+          rc = {rc:.5g~P}
+          rj = {rj:.5g~P}
           mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
           F = {F_cruise_des.to("kN"):.5g~P}
         """)
