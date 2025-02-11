@@ -170,6 +170,9 @@ with open("lines.txt", "w") as f:
         # color=colors[i])
 # plt.legend(loc="upper right")
 
+for tedge in tedges:
+    print(f"trailing edge thickness on {tedge} = {1000*abs(lines[tedge][-2].y.magnitude - lines[tedge][-1].y.magnitude):.2f}mm")
+
 plt.ylim(-1.5, 2.8)
 plt.gca().set_aspect('equal', adjustable='box')
 plt.show()
