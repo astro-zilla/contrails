@@ -12,8 +12,13 @@ from jet import JetCondition, Engine
 print(f"PyAnsys Geometry version: {__version__}")
 
 
-def cut_te(upper, lower):
-    del upper[-5:-1], lower[-5:-1]
+def cut_te(upper, lower, thickness):
+    while abs(upper[-2].y-lower[-2].y).to_base_units().magnitude < thickness.to_base_units().magnitude:
+        if upper[-2].x > lower[-2].x:
+            del upper[-2]
+        else:
+            del lower[-2]
+
     u2, u1 = upper[-2:]
     l2, l1 = lower[-2:]
     if u2.x > l2.x:
@@ -81,6 +86,7 @@ engine = PW1100G
 
 scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude) * unit('m')
 Af = np.pi * (((paths[0][0].start.imag - y0) * scale) ** 2 - ((paths[10][0].start.imag - y0) * scale) ** 2)
+te_thickness = 15 * unit('mm')
 
 print(f"{engine.D = :f}\n"
       f"{scale = :f}\n"
@@ -88,6 +94,7 @@ print(f"{engine.D = :f}\n"
 
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
 print(condition)
+print(condition.T*1005*unit('J/kg/K')+condition.TAS**2/2)
 jet = JetCondition(condition, engine, Af)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
@@ -104,6 +111,7 @@ delta_rb_l = abs(outer.imag - inner.imag) / l0
 # by quadratic formula
 # l = (-np.pi * rb_outer + np.sqrt(np.pi ** 2 * rb_outer ** 2 + 4 * rb_outer * Ab_des)) / 2 / rb_inner_l
 l = (rb_outer - np.sqrt(rb_outer ** 2 - delta_rb_l * Ab_des / np.pi)) / delta_rb_l
+print(f"{l = :.5g~P}")
 t = l / l0
 print(f"{t = :f}")
 move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
@@ -114,6 +122,7 @@ move_path(paths[5], delta)
 paths[5][-1].end -= delta
 paths[5][-1].control2 -= delta
 paths[4][0].start += delta
+print(f"l_inner={abs((paths[4][-1].end.imag - y0) * scale)- r_core_inner:.5g~P}")
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 100)
 colors = [c for c in TABLEAU_COLORS.values()] + ['black']
@@ -131,7 +140,7 @@ lines["fan_iface"][-1] = lines["nosecone"][0]
 lines["nacelle"][0].x = lines["fan_iface"][0].x
 lines["fan_iface"][0] = lines["nacelle"][0]
 # te
-tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"])])
+tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"],te_thickness)])
 # lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
 lines["bypass_tail_outer"][0].x = lines["bypass_iface"][0].x
 lines["bypass_iface"][0] = lines["bypass_tail_outer"][0]
@@ -139,7 +148,7 @@ lines["bypass_iface"][0] = lines["bypass_tail_outer"][0]
 lines["bypass_tail_inner"][0].x = lines["bypass_iface"][-1].x
 lines["bypass_iface"][-1] = lines["bypass_tail_inner"][0]
 # te
-tedges.append(["bypass_tail_inner", "core_tail_outer"][cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"])])
+tedges.append(["bypass_tail_inner", "core_tail_outer"][cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"],te_thickness)])
 # lines["bypass_tail_inner"][-1] = lines["core_tail_outer"][-1]
 lines["core_tail_outer"][0].x = lines["core_iface"][-1].x
 lines["core_iface"][-1] = lines["core_tail_outer"][0]

@@ -100,6 +100,8 @@ class JetCondition:
 
         Vjc = Vjb / engine.Vjb_Vjc
 
+        print(f"Vjb={Vjb:.5g~P}\nVjc={Vjc:.5g~P}\n")
+
         Q = mdotf * LCV_fuel
 
         tc = (Vjc - Vf)
@@ -135,12 +137,12 @@ class JetCondition:
         T05 = self.flasher.flash(H_mass=h05.magnitude, P=p04.magnitude, zs=zs).T * unit('K')
         r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / engine.eta_t)
         p05 = p04 / r_pt
-        T05 = self.flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs).T * unit('K')
+        station_05 = self.flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs)
+        T05 = station_05.T * unit('K')
         T5 = T05 - 0.5 / cP_e * Vjb ** 2
         r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / engine.eta_t)
         p05 = p04 / r_pt
 
-        print(T04, T05, T5, T03 ** 2 / T02)
         print(f"{r_pt=}\n")
 
         Mjc = Vjc / np.sqrt(gam_e * R * T5)
