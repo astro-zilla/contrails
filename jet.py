@@ -92,13 +92,15 @@ class JetCondition:
         # assume bypass is choked. 1/2Vjb^2 = cP(T03b-T3b) OR Vjb = sqrt(gam_a * R * T3b)
         Vjb = np.sqrt(2 * cP_a * (T03b - T3b))
         Vf = self.fc.TAS
-
+        print(p03b,p3b)
         tb = (Vjb - Vf + (p3b - pa) / (ro3b * Vjb))
 
         wfan = cP_a * (T02 - T01)
         wcore = self.engine.BPR * wfan
 
         Vjc = Vjb / engine.Vjb_Vjc
+
+        print(f"Vjb={Vjb:.5g~P}\nVjc={Vjc:.5g~P}\n")
 
         Q = mdotf * LCV_fuel
 
@@ -135,12 +137,12 @@ class JetCondition:
         T05 = self.flasher.flash(H_mass=h05.magnitude, P=p04.magnitude, zs=zs).T * unit('K')
         r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / engine.eta_t)
         p05 = p04 / r_pt
-        T05 = self.flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs).T * unit('K')
+        station_05 = self.flasher.flash(H_mass=h05.magnitude, P=p05.magnitude, zs=zs)
+        T05 = station_05.T * unit('K')
         T5 = T05 - 0.5 / cP_e * Vjb ** 2
         r_pt = (T04 / T05) ** (gam_e / (gam_e - 1) / engine.eta_t)
         p05 = p04 / r_pt
 
-        print(T04, T05, T5, T03 ** 2 / T02)
         print(f"{r_pt=}\n")
 
         Mjc = Vjc / np.sqrt(gam_e * R * T5)
@@ -160,6 +162,10 @@ class JetCondition:
         p2 = p01*(1+(gam_a-1)/2*M2**2)**-(gam_a/(gam_a-1))
         V2 = np.sqrt(cP_a*T01)*(gam_a-1)*M2*(1+(gam_a-1)/2*M2**2)**-0.5
         U2 = self.engine.N1.to_base_units() * self.engine.D/2
+
+        Aj = self.Ab+self.Ac
+        rj = np.sqrt(Aj/(2*np.pi))
+        rc = np.sqrt(self.Ac/(2*np.pi))
 
 
         print(f"""
@@ -182,6 +188,8 @@ class JetCondition:
           phi2 = {(V2 / U2).magnitude: .5g}
         
         TOTAL:
+          rc = {rc:.5g~P}
+          rj = {rj:.5g~P}
           mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
           F = {F_cruise_des.to("kN"):.5g~P}
         """)
