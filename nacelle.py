@@ -8,6 +8,7 @@ from ansys.geometry.core.sketch import Sketch
 from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, UNITVECTOR3D_Y, ZERO_POINT3D
 from pathlib import Path
 from jet import JetCondition, Engine
+from boundary_layer_calc import boundary_layer_mesh_stats
 
 print(f"PyAnsys Geometry version: {__version__}")
 
@@ -74,7 +75,7 @@ PW1100G = Engine(D=(81 * unit('in')).to('m'), BPR=12.5,
                  sfc_cruise=0.0144 * unit('kg/kN/s'),
                  eta_c=0.85, eta_f=0.92345, eta_t=0.9,
                  r_pf=1.22, r_po=37, N1=0.85 * 3281 * unit('2*pi/min'),  # 42
-                 Vjb_Vjc=0.8)
+                 Vjb_Vjc=0.9)
 
 LEAP1A = Engine(D=(78 * unit('in')).to('m'), BPR=11,
                 sfc_cruise=0.0144 * unit('kg/kN/s'),
@@ -94,7 +95,6 @@ print(f"{engine.D = :f}\n"
 
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
 print(condition)
-print(condition.T*1005*unit('J/kg/K')+condition.TAS**2/2)
 jet = JetCondition(condition, engine, Af)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
@@ -111,9 +111,8 @@ delta_rb_l = abs(outer.imag - inner.imag) / l0
 # by quadratic formula
 # l = (-np.pi * rb_outer + np.sqrt(np.pi ** 2 * rb_outer ** 2 + 4 * rb_outer * Ab_des)) / 2 / rb_inner_l
 l = (rb_outer - np.sqrt(rb_outer ** 2 - delta_rb_l * Ab_des / np.pi)) / delta_rb_l
-print(f"{l = :.5g~P}")
 t = l / l0
-print(f"{t = :f}")
+
 move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
 
 r_core_inner = np.sqrt(abs((paths[4][-1].end.imag - y0) * scale) ** 2 - Ac_des / np.pi)
@@ -122,7 +121,7 @@ move_path(paths[5], delta)
 paths[5][-1].end -= delta
 paths[5][-1].control2 -= delta
 paths[4][0].start += delta
-print(f"l_inner={abs((paths[4][-1].end.imag - y0) * scale)- r_core_inner:.5g~P}")
+
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 100)
 colors = [c for c in TABLEAU_COLORS.values()] + ['black']
@@ -178,6 +177,26 @@ with open("lines.txt", "w") as f:
         f.write('\n')
         # color=colors[i])
 # plt.legend(loc="upper right")
+
+print('\nEXTERNAL')
+boundary_layer_mesh_stats(rho=condition.rho, V=condition.TAS, mu=condition.mu,
+                          L=3.8 * unit('m') * 0.0025, x=3.8 * unit('m'),
+                          yplus=1.0, GR=1.2)
+# annulus width
+print('\nBYPASS')
+boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass()*unit('kg/m^3'), V=jet.Vjb, mu=jet.station_03b.mu()*unit('Pa.s').to_base_units(),
+                          L=0.6*unit('m'), x=2.1 * unit('m'),
+                          yplus=1.0, GR=1.175)
+# annulus width
+print('\nCORE')
+boundary_layer_mesh_stats(rho=jet.station_05.rho_mass()*unit('kg/m^3'), V=jet.Vjc, mu=jet.station_05.mu()*unit('Pa.s').to_base_units(),
+                          L=0.4 * unit('m'), x=1.0 * unit('m'),
+                          yplus=1.0, GR=1.15)
+# use bypass annulus as reference dimension
+print('\nWAKE')
+boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass()*unit('kg/m^3'), V=0.5*(jet.Vjc - jet.Vjb), mu=jet.station_03b.mu()*unit('Pa.s').to_base_units(),
+                          L=0.6 * unit('m'), x=5.291 * unit('m'),
+                          yplus=30.0, GR=1.13)
 
 for tedge in tedges:
     print(f"trailing edge thickness on {tedge} = {1000*abs(lines[tedge][-2].y.magnitude - lines[tedge][-1].y.magnitude):.2f}mm")
