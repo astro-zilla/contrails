@@ -1,20 +1,60 @@
+import dataclasses
+import json
+
 import numpy as np
 from flightcondition import FlightCondition, unit
 from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS
+from pint import Quantity
 from svgpathtools import svg2paths
 from ansys.geometry.core import __version__, launch_modeler
 from ansys.geometry.core.sketch import Sketch
-from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, UNITVECTOR3D_Y, ZERO_POINT3D
-from pathlib import Path
-from jet import JetCondition, Engine
+from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, ZERO_POINT3D
+from jet import Hydrocarbon, JetCondition, Engine
 from boundary_layer_calc import boundary_layer_mesh_stats
 
 print(f"PyAnsys Geometry version: {__version__}")
 
+M_h2o = 18.01528  # g/mol
+M_air = 28.9647  # g/mol
+
+
+class AdvancedJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        if isinstance(o, Quantity):
+            # return f"{o:~P}"
+            return o.to_base_units().magnitude
+        return super().default(o)
+
+@dataclasses.dataclass
+class BoundaryCondition:
+    M: float
+    alpha: float
+    T: float
+    h0: float
+    p: float
+    p0: float
+    mu: float
+    Y_h2o: float
+    vx : float
+
+    mdot: float
+    BPR: float
+
+    h0_bypass: float
+    mu_bypass: float
+
+    h0_core: float
+    mu_core: float
+    Y_h2o_core: float
+
+    p_fan: float
+
 
 def cut_te(upper, lower, thickness):
-    while abs(upper[-2].y-lower[-2].y).to_base_units().magnitude < thickness.to_base_units().magnitude:
+    while abs(upper[-2].y - lower[-2].y).to_base_units().magnitude < thickness.to_base_units().magnitude:
         if upper[-2].x > lower[-2].x:
             del upper[-2]
         else:
@@ -53,7 +93,7 @@ def move_path(path, delta):
 
 
 # get bsplines traced from my very specific SVG. not portable, not generalised, terrible coding practice
-paths, attributes = svg2paths("exhaust_traced.svg")
+paths, attributes = svg2paths("images/exhaust_traced.svg")
 # order of this dict matters as it reflects the numbering of lines in the svg.
 # dict ordering is standard in modern python and in svg, but not guaranteed in early python so not pythonic?
 lines = {"nacelle": [],
@@ -71,14 +111,16 @@ lines = {"nacelle": [],
 y0 = paths[6][0].start.imag
 # turbomachinery performance
 
+jetA1 = Hydrocarbon(n_C=10.8, n_H=21.6, LCV=43.15 * unit('MJ/kg'))
+
 PW1100G = Engine(D=(81 * unit('in')).to('m'), BPR=12.5,
-                 sfc_cruise=0.0144 * unit('kg/kN/s'),
+                 sfc_cruise=0.0144 * unit('kg/kN/s'), fuel=jetA1,
                  eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                 r_pf=1.22, r_po=37, N1=0.85 * 3281 * unit('2*pi/min'),  # 42
+                 r_pf=1.23, r_po=37, N1=0.85 * 3281 * unit('2*pi/min'),  # 42
                  Vjb_Vjc=0.9)
 
 LEAP1A = Engine(D=(78 * unit('in')).to('m'), BPR=11,
-                sfc_cruise=0.0144 * unit('kg/kN/s'),
+                sfc_cruise=0.0144 * unit('kg/kN/s'), fuel=jetA1,
                 eta_c=0.85, eta_f=0.92345, eta_t=0.9,
                 r_pf=1.24, r_po=35, N1=0.85 * 3894 * unit('2*pi/min'),  # 40
                 Vjb_Vjc=0.8)
@@ -94,10 +136,35 @@ print(f"{engine.D = :f}\n"
       f"{Af = :f}")
 
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
+
+pv_h2o = 1.6 * unit('Pa')
+p_h2o = 1.0 * pv_h2o  # 100% humidity
+Y_h2o = (M_h2o * p_h2o) / (M_h2o * p_h2o + M_air * (condition.p - p_h2o))
+
 print(condition)
 jet = JetCondition(condition, engine, Af)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
+
+bc = BoundaryCondition(M=condition.M,
+                       alpha=0,
+                       T=condition.T,
+                       h0=jet.station_01.H_mass(),
+                       p=condition.p,
+                       p0=condition.p0,
+                       mu=condition.mu,
+                       Y_h2o=Y_h2o,
+                       vx=condition.TAS,
+                       mdot=jet.mdot,
+                       BPR=engine.BPR,
+                       h0_bypass=jet.station_03b.H_mass(),
+                       mu_bypass=jet.station_03b.mu(),
+                       h0_core=jet.station_05.H_mass(),
+                       mu_core=jet.station_05.mu(),
+                       Y_h2o_core=jet.zs_exhaust[0],
+                       p_fan=jet.p1)
+with open("CAD/boundary_conditions.json", "w", encoding='utf-8') as f:
+    json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
 
 # outer radius stays same
 outer = scale * paths[1][0].end
@@ -139,16 +206,16 @@ lines["fan_iface"][-1] = lines["nosecone"][0]
 lines["nacelle"][0].x = lines["fan_iface"][0].x
 lines["fan_iface"][0] = lines["nacelle"][0]
 # te
-tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"],te_thickness)])
-# lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
+# tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"],te_thickness)])
+lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
 lines["bypass_tail_outer"][0].x = lines["bypass_iface"][0].x
 lines["bypass_iface"][0] = lines["bypass_tail_outer"][0]
 
 lines["bypass_tail_inner"][0].x = lines["bypass_iface"][-1].x
 lines["bypass_iface"][-1] = lines["bypass_tail_inner"][0]
 # te
-tedges.append(["bypass_tail_inner", "core_tail_outer"][cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"],te_thickness)])
-# lines["bypass_tail_inner"][-1] = lines["core_tail_outer"][-1]
+# tedges.append(["bypass_tail_inner", "core_tail_outer"][cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"],te_thickness)])
+lines["bypass_tail_inner"][-1] = lines["core_tail_outer"][-1]
 lines["core_tail_outer"][0].x = lines["core_iface"][-1].x
 lines["core_iface"][-1] = lines["core_tail_outer"][0]
 
@@ -162,21 +229,22 @@ y0 = lines["centreline"][0].y.magnitude
 # Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude - y0) ** 2 - (lines["bypass_iface"][-1].y.magnitude - y0) ** 2)
 # Ac = np.pi * ((lines["core_iface"][-1].y.magnitude - y0) ** 2 - (lines["core_iface"][0].y.magnitude - y0) ** 2)
 # print(f"{Ab = :f}\n{Ac = :f}")
-with open("lines.txt", "w") as f:
+with open("CAD/lines.txt", "w") as f:
     f.write(f'3d=true\nfit=true\n')
     for i, key in enumerate(lines.keys()):
         plt.plot([point.x.magnitude for point in lines[key]], [y0 - point.y.magnitude for point in lines[key]], '-',
                  label=key,
                  color='black')
         for point in lines[key][:-1]:
-            f.write(f'0 {1000*point.x.magnitude} {1000*point.y.magnitude - 1000*y0}\n')
+            f.write(f'0 {1000 * point.x.magnitude} {1000 * point.y.magnitude - 1000 * y0}\n')
         if key in tedges:
-            f.write(f'\n0 {1000*lines[key][-2].x.magnitude} {1000*lines[key][-2].y.magnitude - 1000*y0}\n')
-        f.write(f'0 {1000*lines[key][-1].x.magnitude} {1000*lines[key][-1].y.magnitude - 1000*y0}\n')
+            f.write(f'\n0 {1000 * lines[key][-2].x.magnitude} {1000 * lines[key][-2].y.magnitude - 1000 * y0}\n')
+        f.write(f'0 {1000 * lines[key][-1].x.magnitude} {1000 * lines[key][-1].y.magnitude - 1000 * y0}\n')
 
         f.write('\n')
         # color=colors[i])
 # plt.legend(loc="upper right")
+
 
 print('\nEXTERNAL')
 boundary_layer_mesh_stats(rho=condition.rho, V=condition.TAS, mu=condition.mu,
@@ -184,22 +252,26 @@ boundary_layer_mesh_stats(rho=condition.rho, V=condition.TAS, mu=condition.mu,
                           yplus=1.0, GR=1.2)
 # annulus width
 print('\nBYPASS')
-boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass()*unit('kg/m^3'), V=jet.Vjb, mu=jet.station_03b.mu()*unit('Pa.s').to_base_units(),
-                          L=0.6*unit('m'), x=2.1 * unit('m'),
+boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=jet.Vjb,
+                          mu=jet.station_03b.mu() * unit('Pa.s').to_base_units(),
+                          L=0.6 * unit('m'), x=2.1 * unit('m'),
                           yplus=1.0, GR=1.175)
 # annulus width
 print('\nCORE')
-boundary_layer_mesh_stats(rho=jet.station_05.rho_mass()*unit('kg/m^3'), V=jet.Vjc, mu=jet.station_05.mu()*unit('Pa.s').to_base_units(),
+boundary_layer_mesh_stats(rho=jet.station_05.rho_mass() * unit('kg/m^3'), V=jet.Vjc,
+                          mu=jet.station_05.mu() * unit('Pa.s').to_base_units(),
                           L=0.4 * unit('m'), x=1.0 * unit('m'),
                           yplus=1.0, GR=1.15)
 # use bypass annulus as reference dimension
 print('\nWAKE')
-boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass()*unit('kg/m^3'), V=0.5*(jet.Vjc - jet.Vjb), mu=jet.station_03b.mu()*unit('Pa.s').to_base_units(),
+boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=0.5 * (jet.Vjc - jet.Vjb),
+                          mu=jet.station_03b.mu() * unit('Pa.s').to_base_units(),
                           L=0.6 * unit('m'), x=5.291 * unit('m'),
                           yplus=30.0, GR=1.13)
 
 for tedge in tedges:
-    print(f"trailing edge thickness on {tedge} = {1000*abs(lines[tedge][-2].y.magnitude - lines[tedge][-1].y.magnitude):.2f}mm")
+    print(
+        f"trailing edge thickness on {tedge} = {1000 * abs(lines[tedge][-2].y.magnitude - lines[tedge][-1].y.magnitude):.2f}mm")
 
 plt.ylim(-1.5, 2.8)
 plt.gca().set_aspect('equal', adjustable='box')
