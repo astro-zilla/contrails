@@ -15,14 +15,6 @@ class AdvancedJSONEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-def dataclass_from_dict(cls, dct):
-    if dataclasses.is_dataclass(cls):
-        fieldtypes = {field.name: field.type for field in dataclasses.fields(cls)}
-        return cls(**{field: dataclass_from_dict(fieldtypes[field], dct[field]) for field in dct})
-    else:
-        return dct
-
-
 @dataclasses.dataclass
 class BoundaryLayer:
     y0: float
@@ -58,6 +50,11 @@ class BoundaryCondition:
     bl_bypass_core: BoundaryLayer
     bl_core_tail: BoundaryLayer
     bl_wake: BoundaryLayer
+
+    def __post_init__(self):
+        for bl in [self.bl_nacelle_bypass, self.bl_bypass_core, self.bl_core_tail, self.bl_wake]:
+            if isinstance(bl, dict):
+                bl = BoundaryLayer(**bl)
 
 
 def boundary_layer_mesh_stats(rho, V, mu, L, x, yplus, GR):
