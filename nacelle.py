@@ -11,7 +11,7 @@ from ansys.geometry.core import __version__, launch_modeler
 from ansys.geometry.core.sketch import Sketch
 from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, ZERO_POINT3D
 from jet import Hydrocarbon, JetCondition, Engine
-from boundary_layer_calc import boundary_layer_mesh_stats
+from boundary_layer_calc import boundary_layer_mesh_stats, BoundaryLayer
 
 print(f"PyAnsys Geometry version: {__version__}")
 
@@ -27,6 +27,14 @@ class AdvancedJSONEncoder(json.JSONEncoder):
             # return f"{o:~P}"
             return o.to_base_units().magnitude
         return super().default(o)
+
+def dataclass_from_dict(cls, dct):
+    if dataclasses.is_dataclass(cls):
+        fieldtypes = {field.name: field.type for field in dataclasses.fields(cls)}
+        return cls(**{field: dataclass_from_dict(fieldtypes[field], dct[field]) for field in dct})
+    else:
+        return dct
+
 
 @dataclasses.dataclass
 class BoundaryCondition:
@@ -51,6 +59,11 @@ class BoundaryCondition:
     Y_h2o_core: float
 
     p_fan: float
+
+    bl_nacelle_bypass: BoundaryLayer
+    bl_bypass_core: BoundaryLayer
+    bl_core_tail: BoundaryLayer
+    bl_wake: BoundaryLayer
 
 
 def cut_te(upper, lower, thickness):
@@ -146,25 +159,7 @@ jet = JetCondition(condition, engine, Af)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
 
-bc = BoundaryCondition(M=condition.M,
-                       alpha=0,
-                       T=condition.T,
-                       h0=jet.station_01.H_mass(),
-                       p=condition.p,
-                       p0=condition.p0,
-                       mu=condition.mu,
-                       Y_h2o=Y_h2o,
-                       vx=condition.TAS,
-                       mdot=jet.mdot,
-                       BPR=engine.BPR,
-                       h0_bypass=jet.station_03b.H_mass(),
-                       mu_bypass=jet.station_03b.mu(),
-                       h0_core=jet.station_05.H_mass(),
-                       mu_core=jet.station_05.mu(),
-                       Y_h2o_core=jet.zs_exhaust[0],
-                       p_fan=jet.p1)
-with open("CAD/boundary_conditions.json", "w", encoding='utf-8') as f:
-    json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
+
 
 # outer radius stays same
 outer = scale * paths[1][0].end
@@ -247,27 +242,51 @@ with open("CAD/lines.txt", "w") as f:
 
 
 print('\nEXTERNAL')
-boundary_layer_mesh_stats(rho=condition.rho, V=condition.TAS, mu=condition.mu,
+BL1 = boundary_layer_mesh_stats(rho=condition.rho, V=condition.TAS, mu=condition.mu,
                           L=3.8 * unit('m') * 0.0025, x=3.8 * unit('m'),
                           yplus=1.0, GR=1.2)
 # annulus width
 print('\nBYPASS')
-boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=jet.Vjb,
+BL2 = boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=jet.Vjb,
                           mu=jet.station_03b.mu() * unit('Pa.s').to_base_units(),
                           L=0.6 * unit('m'), x=2.1 * unit('m'),
-                          yplus=1.0, GR=1.175)
+                          yplus=1.0, GR=1.2)
 # annulus width
 print('\nCORE')
-boundary_layer_mesh_stats(rho=jet.station_05.rho_mass() * unit('kg/m^3'), V=jet.Vjc,
+BL3 = boundary_layer_mesh_stats(rho=jet.station_05.rho_mass() * unit('kg/m^3'), V=jet.Vjc,
                           mu=jet.station_05.mu() * unit('Pa.s').to_base_units(),
                           L=0.4 * unit('m'), x=1.0 * unit('m'),
-                          yplus=1.0, GR=1.15)
+                          yplus=1.0, GR=1.2)
 # use bypass annulus as reference dimension
 print('\nWAKE')
-boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=0.5 * (jet.Vjc - jet.Vjb),
+BL4 = boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=0.5 * (jet.Vjc - jet.Vjb),
                           mu=jet.station_03b.mu() * unit('Pa.s').to_base_units(),
                           L=0.6 * unit('m'), x=5.291 * unit('m'),
-                          yplus=30.0, GR=1.13)
+                          yplus=30.0, GR=1.2)
+
+bc = BoundaryCondition(M=condition.M,
+                       alpha=0,
+                       T=condition.T,
+                       h0=jet.station_01.H_mass()+jet.h_ref.magnitude,
+                       p=condition.p,
+                       p0=condition.p0,
+                       mu=condition.mu,
+                       Y_h2o=Y_h2o,
+                       vx=condition.TAS,
+                       mdot=jet.mdot,
+                       BPR=engine.BPR,
+                       h0_bypass=jet.station_03b.H_mass()+jet.h_ref.magnitude,
+                       mu_bypass=jet.station_03b.mu(),
+                       h0_core=jet.station_05.H_mass()+jet.h_ref.magnitude,
+                       mu_core=jet.station_05.mu(),
+                       Y_h2o_core=jet.zs_exhaust[0],
+                       p_fan=jet.p1,
+                       bl_nacelle_bypass=BL1,
+                       bl_bypass_core=BL2,
+                       bl_core_tail=BL3,
+                       bl_wake=BL4)
+with open("CAD/boundary_conditions.json", "w", encoding='utf-8') as f:
+    json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
 
 for tedge in tedges:
     print(

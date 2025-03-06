@@ -1,5 +1,12 @@
+import dataclasses
+
 import numpy as np
 
+@dataclasses.dataclass
+class BoundaryLayer:
+    y0: float
+    n: int
+    GR: float
 
 def boundary_layer_mesh_stats(rho, V, mu, L, x, yplus, GR):
     # Reynolds number for leading edge y+ calculation (critical)
@@ -23,3 +30,5 @@ def boundary_layer_mesh_stats(rho, V, mu, L, x, yplus, GR):
 BL height    = {delta_x.to('mm'):0= 3g~P}
 prism layers = {int(n): d}
 last layer   = {final_layer_height.to('mm'): 3g~P}""")
+
+    return BoundaryLayer(y0, int(n), GR)
