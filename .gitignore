@@ -1,3 +1,5 @@
 CAD
 .venv
+.idea
+__pycache__
 images
