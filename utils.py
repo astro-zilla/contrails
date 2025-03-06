@@ -2,17 +2,21 @@ import dataclasses
 import json
 
 import numpy as np
-from pint import Quantity
+try:
+    from pint import Quantity
 
 
-class AdvancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        if isinstance(o, Quantity):
-            # return f"{o:~P}"
-            return o.to_base_units().magnitude
-        return super().default(o)
+    class AdvancedJSONEncoder(json.JSONEncoder):
+        def default(self, o):
+            if dataclasses.is_dataclass(o):
+                return dataclasses.asdict(o)
+            if isinstance(o, Quantity):
+                # return f"{o:~P}"
+                return o.to_base_units().magnitude
+            return super().default(o)
+
+except ModuleNotFoundError:
+    print("[contrails.utils] pint not installed, AdvancedJSONEncoder will not be available.")
 
 
 def dataclass_from_dict(cls, dct):
