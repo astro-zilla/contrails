@@ -56,9 +56,14 @@ class BoundaryCondition:
     bl_wake: BoundaryLayer
 
     def __post_init__(self):
-        for bl in [self.bl_nacelle_bypass, self.bl_bypass_core, self.bl_core_tail, self.bl_wake]:
-            if isinstance(bl, dict):
-                bl = BoundaryLayer(**bl)
+            if isinstance(self.bl_nacelle_bypass, dict):
+                self.bl_nacelle_bypass = BoundaryLayer(**self.bl_nacelle_bypass)
+            if isinstance(self.bl_bypass_core, dict):
+                self.bl_bypass_core = BoundaryLayer(**self.bl_bypass_core)
+            if isinstance(self.bl_core_tail, dict):
+                self.bl_core_tail = BoundaryLayer(**self.bl_core_tail)
+            if isinstance(self.bl_wake, dict):
+                self.bl_wake = BoundaryLayer(**self.bl_wake)
 
 
 def boundary_layer_mesh_stats(rho, V, mu, L, x, yplus, GR):
