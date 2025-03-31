@@ -1,12 +1,9 @@
 from dataclasses import dataclass
 
-import matplotlib
 import numpy as np
 from flightcondition import FlightCondition, unit
 from thermo import ChemicalConstantsPackage, CEOSGas, PRMIX, CEOSLiquid, FlashVL
 from thermo.interaction_parameters import IPDB
-import matplotlib.pyplot as plt
-from svgpathtools import parse_path, svg2paths
 from scipy.optimize import root_scalar
 
 
@@ -22,7 +19,6 @@ class Hydrocarbon:
 
 
 def get_exhaust_comp(AFR: float, fuel: Hydrocarbon, Y_h2o: float):
-    """  C 10.8 H 21.6 + phi*(C_f+H_f/4)(O2 + 79/21N2) --> C_f CO2 + H_f/2 H2O + phi*(C_f+H_f/4) - H_f/4 O2 + phi*(C_f+H_f/4) * 79/21 N2 """
     M_H2O = 18.02
     M_CO2 = 44.01
     M_N2 = 28.01
@@ -68,7 +64,7 @@ class Engine:
 
 
 class JetCondition:
-    def __init__(self, flight_condition, engine, Af, Y_h2o):
+    def __init__(self, flight_condition: FlightCondition, engine: Engine, Af: float, Y_h2o: float):
         self.fc = flight_condition
         self.engine = engine
         self.Af = Af
