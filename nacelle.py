@@ -10,8 +10,10 @@ from svgpathtools import svg2paths
 from ansys.geometry.core import __version__, launch_modeler
 from ansys.geometry.core.sketch import Sketch
 from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, ZERO_POINT3D
+from thermo import SublimationPressure, VaporPressure, vapor_pressure_methods
+
 from jet import Hydrocarbon, JetCondition, Engine
-from boundary_layer_calc import boundary_layer_mesh_stats, BoundaryLayer
+from utils import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats, move_path, move_pt
 
 print(f"PyAnsys Geometry version: {__version__}")
 
@@ -66,13 +68,18 @@ print(f"{engine.D = :f}\n"
       f"{Af = :f}")
 
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
+print(condition)
 
-pv_h2o = 1.6 * unit('Pa')
-p_h2o = 1.0 * pv_h2o  # 100% humidity
+
+vp=SublimationPressure(CASRN='7732-18-5')
+psat=vp.calculate(condition.T.magnitude,"IAPWS")*unit('Pa')
+
+p_h2o = 1.20 * psat  # 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
 Y_h2o = (M_h2o * p_h2o) / (M_h2o * p_h2o + M_air * (condition.p - p_h2o))
 
-print(condition)
-jet = JetCondition(condition, engine, Af)
+
+
+jet = JetCondition(condition, engine, Af, Y_h2o)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
 
@@ -148,10 +155,10 @@ with open("CAD/lines.txt", "w") as f:
                  label=key,
                  color='black')
         for point in lines[key][:-1]:
-            f.write(f'0 {1000 * point.x.magnitude} {1000 * point.y.magnitude - 1000 * y0}\n')
+            f.write(f'0 {1000 * point.x.magnitude} {abs(1000 * point.y.magnitude - 1000 * y0)}\n')
         if key in tedges:
-            f.write(f'\n0 {1000 * lines[key][-2].x.magnitude} {1000 * lines[key][-2].y.magnitude - 1000 * y0}\n')
-        f.write(f'0 {1000 * lines[key][-1].x.magnitude} {1000 * lines[key][-1].y.magnitude - 1000 * y0}\n')
+            f.write(f'\n0 {1000 * lines[key][-2].x.magnitude} {abs(1000 * lines[key][-2].y.magnitude - 1000 * y0)}\n')
+        f.write(f'0 {1000 * lines[key][-1].x.magnitude} {abs(1000 * lines[key][-1].y.magnitude - 1000 * y0)}\n')
 
         f.write('\n')
         # color=colors[i])
@@ -194,10 +201,13 @@ bc = BoundaryCondition(M=condition.M,
                        BPR=engine.BPR,
                        h0_bypass=jet.station_03b.H_mass()+jet.h_ref.magnitude,
                        mu_bypass=jet.station_03b.mu(),
+                       A_bypass=abs(np.pi*((lines["bypass_iface"][0].y.magnitude-y0)**2 - (lines["bypass_iface"][-1].y.magnitude-y0)**2)),
                        h0_core=jet.station_05.H_mass()+jet.h_ref.magnitude,
                        mu_core=jet.station_05.mu(),
+                       A_core=abs(np.pi*((lines["core_iface"][0].y.magnitude-y0)**2 - (lines["core_iface"][-1].y.magnitude-y0)**2)),
                        Y_h2o_core=jet.zs_exhaust[0],
                        p_fan=jet.p1,
+                       A_fan=abs(np.pi*((lines["fan_iface"][0].y.magnitude-y0)**2 - (lines["fan_iface"][-1].y.magnitude-y0)**2)),
                        bl_nacelle_bypass=BL1,
                        bl_bypass_core=BL2,
                        bl_core_tail=BL3,

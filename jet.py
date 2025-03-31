@@ -21,7 +21,7 @@ class Hydrocarbon:
         return 12.011 * self.n_C + 1.00784 * self.n_H
 
 
-def get_exhaust_comp(AFR: float, fuel: Hydrocarbon):
+def get_exhaust_comp(AFR: float, fuel: Hydrocarbon, Y_h2o: float):
     """  C 10.8 H 21.6 + phi*(C_f+H_f/4)(O2 + 79/21N2) --> C_f CO2 + H_f/2 H2O + phi*(C_f+H_f/4) - H_f/4 O2 + phi*(C_f+H_f/4) * 79/21 N2 """
     M_H2O = 18.02
     M_CO2 = 44.01
@@ -39,7 +39,7 @@ def get_exhaust_comp(AFR: float, fuel: Hydrocarbon):
     MTOTAL = nCO2 * M_H2O + nH2O * M_H2O + nO2 * M_O2 + nN2 * M_H2O
 
     wtCO2 = (nCO2 * M_CO2) / MTOTAL
-    wtH2O = (nH2O * M_H2O) / MTOTAL
+    wtH2O = (nH2O * M_H2O) / MTOTAL + Y_h2o
     wtO2 = (nO2 * M_O2) / MTOTAL
     wtN2 = (nN2 * M_N2) / MTOTAL
 
@@ -68,7 +68,7 @@ class Engine:
 
 
 class JetCondition:
-    def __init__(self, flight_condition, engine, Af):
+    def __init__(self, flight_condition, engine, Af, Y_h2o):
         self.fc = flight_condition
         self.engine = engine
         self.Af = Af
@@ -148,7 +148,7 @@ class JetCondition:
         self.mdot = mdotb + mdotc
 
         # station 4 - combustor exit
-        self.zs_exhaust = get_exhaust_comp(AFR=(mdotc / mdotf).to_base_units(), fuel=engine.fuel)
+        self.zs_exhaust = get_exhaust_comp(AFR=(mdotc / mdotf).to_base_units(), fuel=engine.fuel, Y_h2o=Y_h2o)
         Q = mdotf * engine.fuel.LCV
         p04 = 0.99 * p03
         h04 = h03 + Q / mdotc
@@ -171,10 +171,13 @@ class JetCondition:
         Mjc = self.Vjc / np.sqrt(gam_e * R * T5)
 
         # exit areas from assumption that bypass is choked and core exits at ambient pressure
-        # todo: estimate exit pressure based on a pressure coefficient
+
+        # @incollection{HOUGHTON2013427, title = {Chapter 7 - Airfoils and Wings in Compressible Flow}, editor = {E.L. Houghton and P.W. Carpenter and Steven H. Collicott and Daniel T. Valentine}, booktitle = {Aerodynamics for Engineering Students (Sixth Edition)}, publisher = {Butterworth-Heinemann}, edition = {Sixth Edition}, address = {Boston}, pages = {427-477}, year = {2013}, isbn = {978-0-08-096632-8}, doi = {https://doi.org/10.1016/B978-0-08-096632-8.00007-2}, url = {https://www.sciencedirect.com/science/article/pii/B9780080966328000072}, author = {E.L. Houghton and P.W. Carpenter and Steven H. Collicott and Daniel T. Valentine}, keywords = {critical Mach number, linearized subsonic flow, linearized supersonic flow, Prandtl-Glauert rule, compressibility correction, small disturbance theory, supersonic wings, wing sweep, Ackert's rule}, abstract = {Publisher Summary: The chapter discusses the subsonic linearized compressible flow theory for extending the trusted results from incompressible flow into high subsonic flight. The most sweeping approximations, producing the simplest solutions, are made here and result in soluble linear differential equations. This leads to the expression linearized theory associated with airfoils. The chapter summarizes the supersonic linearized theory such as symmetrical double wedge airfoil in supersonic flow, supersonic biconvex circular arc airfoil in supersonic flow, general airfoil section, airfoil section made up of unequal circular arcs, double-wedge airfoil section. Several other aspects of supersonic wings such as the shock-expansion approximation, wings of finite span, computational methods are also presented in this chapter. The compressible-flow equations in various forms are considered in order to predict the behavior of airfoil sections in high sub- and supersonic flows. The wings in compressible flow, such as transonic flow, subcritical flow, supersonic linearized theory, and other aspects of supersonic wings are discussed in this chapter. The analysis of this regime involves solving a set of nonlinear differential equations, a task that demands either advanced computational techniques or some form of approximation. The approximations come about mainly from assuming that all disturbances are small disturbances or small perturbations to the free-stream flow conditions. The chapter also explores the phenomenon of wave drag in supersonic flight and how it is predicted by both the shock-expansion method and linearized supersonic flow.}}
+        cp = 0.0
+        p_core_exit = self.fc.q_inf * cp/np.sqrt(1-self.fc.M**2) + self.fc.p
         self.Ab = mdotb * np.sqrt(cP_a * T03b) / 1.281 / p03b
         self.Ac = mdotc * np.sqrt(cP_e * T05) / (
-                gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / self.fc.p
+                gam_e / np.sqrt(gam_e - 1) * Mjc * (1 + (gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / p_core_exit
 
         # station 1 - intake
         f = (mdotb + mdotc) * np.sqrt(cP_a * T01) / self.Af / p01

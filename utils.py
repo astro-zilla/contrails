@@ -43,12 +43,15 @@ class BoundaryCondition:
 
     h0_bypass: float
     mu_bypass: float
+    A_bypass: float
 
     h0_core: float
     mu_core: float
+    A_core: float
     Y_h2o_core: float
 
     p_fan: float
+    A_fan: float
 
     bl_nacelle_bypass: BoundaryLayer
     bl_bypass_core: BoundaryLayer
