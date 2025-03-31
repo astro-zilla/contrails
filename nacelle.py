@@ -1,11 +1,9 @@
-import dataclasses
 import json
 
 import numpy as np
 from flightcondition import FlightCondition, unit
 from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS
-from pint import Quantity
 from svgpathtools import svg2paths
 from ansys.geometry.core import __version__, launch_modeler
 from ansys.geometry.core.sketch import Sketch
