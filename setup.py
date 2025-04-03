@@ -1,7 +1,10 @@
 import dataclasses
 import json
 
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError:
+    np = None
 
 
 class AdvancedJSONEncoder(json.JSONEncoder):
