@@ -1,7 +1,10 @@
 import dataclasses
 import json
-
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError:
+    print("[contrails.utils] numpy not installed, boundary_layer_mesh_stats will not be available.")
+    np = None
 try:
     from pint import Quantity
 
