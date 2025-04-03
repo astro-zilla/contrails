@@ -169,21 +169,29 @@ BL1 = boundary_layer_mesh_stats(rho=condition.rho, V=condition.TAS, mu=condition
 # annulus width
 print('\nBYPASS')
 BL2 = boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=jet.Vjb,
-                          mu=jet.station_03b.mu() * unit('Pa.s').to_base_units(),
-                          L=0.6 * unit('m'), x=2.1 * unit('m'),
-                          yplus=1.0, GR=1.2)
+                                mu=jet.station_03b.nu() * unit('Pa.s').to_base_units(),
+                                L=0.6 * unit('m'), x=2.1 * unit('m'),
+                                yplus=1.0, GR=1.2)
 # annulus width
 print('\nCORE')
 BL3 = boundary_layer_mesh_stats(rho=jet.station_05.rho_mass() * unit('kg/m^3'), V=jet.Vjc,
-                          mu=jet.station_05.mu() * unit('Pa.s').to_base_units(),
-                          L=0.4 * unit('m'), x=1.0 * unit('m'),
-                          yplus=1.0, GR=1.2)
+                                mu=jet.station_05.nu() * unit('Pa.s').to_base_units(),
+                                L=0.4 * unit('m'), x=1.0 * unit('m'),
+                                yplus=1.0, GR=1.2)
 # use bypass annulus as reference dimension
 print('\nWAKE')
 BL4 = boundary_layer_mesh_stats(rho=jet.station_03b.rho_mass() * unit('kg/m^3'), V=0.5 * (jet.Vjc - jet.Vjb),
-                          mu=jet.station_03b.mu() * unit('Pa.s').to_base_units(),
-                          L=0.6 * unit('m'), x=5.291 * unit('m'),
-                          yplus=30.0, GR=1.2)
+                                mu=jet.station_03b.nu() * unit('Pa.s').to_base_units(),
+                                L=0.6 * unit('m'), x=5.291 * unit('m'),
+                                yplus=30.0, GR=1.2)
+
+I_bypass = 0.05 #  Russo, F. and Basse, N.T. (2016)
+I_core = 0.10 # https://www.cfd-online.com/Wiki/Turbulence_intensity
+
+nu_bypass = np.sqrt(3/2)*condition.TAS*I_bypass*0.05*np.pi*2*abs((lines["bypass_iface"][0].y.magnitude+lines["bypass_iface"][-1].y.magnitude)/2-y0)*unit('m')/20 # https://www.cfd-online.com/Wiki/Turbulent_length_scale
+nu_core = np.sqrt(3/2)*condition.TAS*I_core*0.05*np.pi*2*abs((lines["core_iface"][0].y.magnitude+lines["core_iface"][-1].y.magnitude)/2-y0)*unit('m')/400 # https://www.cfd-online.com/Wiki/Turbulent_length_scale
+
+print(nu_bypass,nu_core,condition.mu/condition.rho)
 
 bc = BoundaryCondition(M=condition.M,
                        alpha=0,
@@ -191,16 +199,16 @@ bc = BoundaryCondition(M=condition.M,
                        h0=jet.station_01.H_mass()+jet.h_ref.magnitude,
                        p=condition.p,
                        p0=condition.p0,
-                       mu=condition.mu,
+                       nu=condition.nu,
                        Y_h2o=Y_h2o,
                        vx=condition.TAS,
                        mdot=jet.mdot,
                        BPR=engine.BPR,
                        h0_bypass=jet.station_03b.H_mass()+jet.h_ref.magnitude,
-                       mu_bypass=jet.station_03b.mu(),
+                       nu_bypass=nu_bypass,
                        A_bypass=abs(np.pi*((lines["bypass_iface"][0].y.magnitude-y0)**2 - (lines["bypass_iface"][-1].y.magnitude-y0)**2)),
                        h0_core=jet.station_05.H_mass()+jet.h_ref.magnitude,
-                       mu_core=jet.station_05.mu(),
+                       nu_core=nu_core,
                        A_core=abs(np.pi*((lines["core_iface"][0].y.magnitude-y0)**2 - (lines["core_iface"][-1].y.magnitude-y0)**2)),
                        Y_h2o_core=jet.zs_exhaust[0],
                        p_fan=jet.p1,

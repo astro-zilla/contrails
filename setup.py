@@ -39,7 +39,7 @@ class BoundaryCondition:
     h0: float
     p: float
     p0: float
-    mu: float
+    nu: float
     Y_h2o: float
     vx: float
 
@@ -47,11 +47,11 @@ class BoundaryCondition:
     BPR: float
 
     h0_bypass: float
-    mu_bypass: float
+    nu_bypass: float
     A_bypass: float
 
     h0_core: float
-    mu_core: float
+    nu_core: float
     A_core: float
     Y_h2o_core: float
 
