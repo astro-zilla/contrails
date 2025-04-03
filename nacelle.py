@@ -8,19 +8,16 @@ from svgpathtools import svg2paths
 from ansys.geometry.core import __version__, launch_modeler
 from ansys.geometry.core.sketch import Sketch
 from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, ZERO_POINT3D
-from thermo import SublimationPressure, VaporPressure, vapor_pressure_methods
 
 from jet import Hydrocarbon, JetCondition, Engine
-from utils import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats, move_path, move_pt
+from setup import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats
+from geometry import move_path, move_pt
+from hygrometry import psat_ice, psat_water
 
 print(f"PyAnsys Geometry version: {__version__}")
 
 M_h2o = 18.01528  # g/mol
 M_air = 28.9647  # g/mol
-
-
-
-
 
 # get bsplines traced from my very specific SVG. not portable, not generalised, terrible coding practice
 paths, attributes = svg2paths("images/exhaust_traced.svg")
@@ -69,11 +66,13 @@ condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), uni
 print(condition)
 
 
-vp=SublimationPressure(CASRN='7732-18-5')
-psat=vp.calculate(condition.T.magnitude,"IAPWS")*unit('Pa')
+pv_w = psat_water(condition.p.magnitude,condition.T.magnitude)*unit('Pa')
+pv_i = psat_ice(condition.p.magnitude,condition.T.magnitude)*unit('Pa')
 
-p_h2o = 1.20 * psat  # 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
+p_h2o = (pv_w+pv_i)/2  # between limits. can also be set to 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
 Y_h2o = (M_h2o * p_h2o) / (M_h2o * p_h2o + M_air * (condition.p - p_h2o))
+
+print(pv_w,pv_i,p_h2o,Y_h2o)
 
 
 
