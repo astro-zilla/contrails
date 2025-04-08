@@ -45,6 +45,7 @@ class BoundaryCondition:
 
     mdot: float
     BPR: float
+    Fnet: float
 
     h0_bypass: float
     nu_bypass: float

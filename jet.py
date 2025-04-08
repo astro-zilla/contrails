@@ -89,8 +89,9 @@ class JetCondition:
 
         LD = 18  # A320
         L = 55000 * 0.00981 * unit('kN')  # A320
-        F_cruise_des = L / LD / 2
-        mdotf = self.engine.sfc_cruise * F_cruise_des
+        self.Fnet = L / LD / 2
+        print(f"Thrust: {self.Fnet.to('kN'):.5g~P}")
+        mdotf = self.engine.sfc_cruise * self.Fnet
         # TET can be 1550K
         # EGT can be 15-25% for cooling - taken after HPC
         # epsilon Tg-Tm / Tg-Tc for cooling is around 0.6-0.7
@@ -139,7 +140,7 @@ class JetCondition:
         wcore = self.engine.BPR * wfan
 
         # required mass flows
-        mdotc = (F_cruise_des / (tc + self.engine.BPR * tb)).to_base_units()
+        mdotc = (self.Fnet / (tc + self.engine.BPR * tb)).to_base_units()
         mdotb = mdotc * self.engine.BPR
         self.mdot = mdotb + mdotc
 
@@ -214,7 +215,7 @@ class JetCondition:
           rc = {rc:.5g~P}
           rj = {rj:.5g~P}
           mdot = {mdotc.to_base_units():.5g~P} + {mdotb.to_base_units():.5g~P} = {(mdotb + mdotc).to_base_units():.5g~P}
-          F = {F_cruise_des.to("kN"):.5g~P}
+          F = {self.Fnet.to("kN"):.5g~P}
         """)
 
 # give bypass ratio and fan area in filename so paraview script can run jet with correct params
