@@ -1,20 +1,15 @@
 import json
-
 import numpy as np
 from flightcondition import FlightCondition, unit
 from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS
 from svgpathtools import svg2paths
-from ansys.geometry.core import __version__, launch_modeler
-from ansys.geometry.core.sketch import Sketch
-from ansys.geometry.core.math import Point2D, Vector3D, Point3D, UNITVECTOR3D_X, ZERO_POINT3D
 
 from jet import Hydrocarbon, JetCondition, Engine
 from setup import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats
 from geometry import move_path, move_pt
 from hygrometry import psat_ice, psat_water
 
-print(f"PyAnsys Geometry version: {__version__}")
 
 M_h2o = 18.01528  # g/mol
 M_air = 28.9647  # g/mol
@@ -217,7 +212,7 @@ bc = BoundaryCondition(M=condition.M,
                        bl_bypass_core=BL2,
                        bl_core_tail=BL3,
                        bl_wake=BL4)
-with open("CAD/boundary_conditions.json", "w", encoding='utf-8') as f:
+with open("../geom/boundary_conditions.json", "w", encoding='utf-8') as f:
     json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
 
 for tedge in tedges:
@@ -228,35 +223,3 @@ plt.ylim(-1.5, 2.8)
 plt.gca().set_aspect('equal', adjustable='box')
 plt.show()
 exit()
-# draw lines in sketch segment by segment
-sketch = Sketch()
-for key in lines.keys():
-    if key != "centreline":
-        points = lines[key]
-        sketch.segment(points[0], points[1])
-        for i in range(len(points) - 2):
-            sketch.segment_to_point(points[i + 2])
-
-sketch.segment(lines["nosecone"][-1], lines["tail_zero_rad"][-1])
-
-# translate so that tip of nosecone is origin
-nose = Point3D((lines["nosecone"][-1].x.magnitude, lines["nosecone"][-1].y.magnitude, 0))
-sketch.translate_sketch_plane(-Vector3D(nose))
-
-# revolve to 3d in SpaceClaim
-# has to be run on windows
-modeler = launch_modeler()
-design = modeler.create_design(f"nacelle")
-design.revolve_sketch("Nacelle", sketch, UNITVECTOR3D_X, 360 * unit("degrees"), ZERO_POINT3D)
-design.plot()
-
-scdocx_location = design.export_to_scdocx()
-print(f"design saved to {scdocx_location}")
-
-modeler.close()
-
-# handles, labels = plt.gca().get_legend_handles_labels()
-# by_label = dict(zip(labels, handles))
-# plt.legend(by_label.values(), by_label.keys())
-# plt.axis("equal")
-# plt.show()
