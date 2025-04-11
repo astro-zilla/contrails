@@ -1,5 +1,6 @@
 import json
 import numpy as np
+from ansys.geometry.core.math import Point2D
 from flightcondition import FlightCondition, unit
 from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS
@@ -77,28 +78,28 @@ Ac_des = jet.Ac.to_base_units()
 
 
 
-# outer radius stays same
-outer = scale * paths[1][0].end
-inner = scale * paths[2][1].start
-l0 = abs(outer - inner)
-# inner control point follows straight line from inital point to outside te
-rb_outer = abs(outer.imag - y0 * scale)
-delta_rb_l = abs(outer.imag - inner.imag) / l0
-
-# A = np.pi*(rb_outer+l0*rb_inner_l)*l0
-# by quadratic formula
-# l = (-np.pi * rb_outer + np.sqrt(np.pi ** 2 * rb_outer ** 2 + 4 * rb_outer * Ab_des)) / 2 / rb_inner_l
-l = (rb_outer - np.sqrt(rb_outer ** 2 - delta_rb_l * Ab_des / np.pi)) / delta_rb_l
-t = l / l0
-
-move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
-
-r_core_inner = np.sqrt(abs((paths[4][-1].end.imag - y0) * scale) ** 2 - Ac_des / np.pi)
-delta = (r_core_inner - abs((paths[5][0].start.imag - y0) * scale)) / scale * complex(0, -1)
-move_path(paths[5], delta)
-paths[5][-1].end -= delta
-paths[5][-1].control2 -= delta
-paths[4][0].start += delta
+# # outer radius stays same
+# outer = scale * paths[1][0].end
+# inner = scale * paths[2][1].start
+# l0 = abs(outer - inner)
+# # inner control point follows straight line from inital point to outside te
+# rb_outer = abs(outer.imag - y0 * scale)
+# delta_rb_l = abs(outer.imag - inner.imag) / l0
+#
+# # A = np.pi*(rb_outer+l0*rb_inner_l)*l0
+# # by quadratic formula
+# # l = (-np.pi * rb_outer + np.sqrt(np.pi ** 2 * rb_outer ** 2 + 4 * rb_outer * Ab_des)) / 2 / rb_inner_l
+# l = (rb_outer - np.sqrt(rb_outer ** 2 - delta_rb_l * Ab_des / np.pi)) / delta_rb_l
+# t = l / l0
+#
+# move_pt(paths[2], 1, t * inner / scale + (1 - t) * outer / scale)
+#
+# r_core_inner = np.sqrt(abs((paths[4][-1].end.imag - y0) * scale) ** 2 - Ac_des / np.pi)
+# delta = (r_core_inner - abs((paths[5][0].start.imag - y0) * scale)) / scale * complex(0, -1)
+# move_path(paths[5], delta)
+# paths[5][-1].end -= delta
+# paths[5][-1].control2 -= delta
+# paths[4][0].start += delta
 
 # interpolate through splines, 10 samples per spline segment
 t = np.linspace(0, 1, 100)
