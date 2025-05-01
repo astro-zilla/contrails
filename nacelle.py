@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS
 from svgpathtools import svg2paths
 
-from jet import Hydrocarbon, JetCondition, Engine
+from jet import JetCondition, LEAP1A, PW1100G
 from setup import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats
 from geometry import move_path, move_pt
 from hygrometry import psat_ice, psat_water
@@ -31,35 +31,19 @@ lines = {"nacelle": [],
          "tail_zero_rad": [],
          "nosecone": []}
 
-y0 = paths[6][0].start.imag
+y0_raw = paths[6][0].start.imag
 # turbomachinery performance
 
-jetA1 = Hydrocarbon(n_C=10.8, n_H=21.6, LCV=43.15 * unit('MJ/kg'))
 
-PW1100G = Engine(D=(81 * unit('in')).to('m'), BPR=12.5,
-                 sfc_cruise=0.0144 * unit('kg/kN/s'), fuel=jetA1,
-                 eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                 r_pf=1.23, r_po=37, N1=0.85 * 3281 * unit('2*pi/min'),  # 42
-                 Vjb_Vjc=0.9)
-
-LEAP1A = Engine(D=(78 * unit('in')).to('m'), BPR=11,
-                sfc_cruise=0.0144 * unit('kg/kN/s'), fuel=jetA1,
-                eta_c=0.85, eta_f=0.92345, eta_t=0.9,
-                r_pf=1.24, r_po=35, N1=0.85 * 3894 * unit('2*pi/min'),  # 40
-                Vjb_Vjc=0.8)
 
 engine = PW1100G
 
 scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude) * unit('m')
-Af = np.pi * (((paths[0][0].start.imag - y0) * scale) ** 2 - ((paths[10][0].start.imag - y0) * scale) ** 2)
+Af = np.pi * (((paths[0][0].start.imag - y0_raw) * scale) ** 2 - ((paths[10][0].start.imag - y0_raw) * scale) ** 2)
 te_thickness = 15 * unit('mm')
 
-print(f"{engine.D = :f}\n"
-      f"{scale = :f}\n"
-      f"{Af = :f}")
-
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
-print(condition)
+# print(condition)
 
 
 pv_w = psat_water(condition.p.magnitude,condition.T.magnitude)*unit('Pa')
@@ -71,11 +55,18 @@ Y_h2o = (M_h2o * p_h2o) / (M_h2o * p_h2o + M_air * (condition.p - p_h2o))
 print(pv_w,pv_i,p_h2o,Y_h2o)
 
 
+p1 = scale*paths[1][0].end
+p2 = scale*paths[2][1].start
+L = abs(p1-p2)
 
-jet = JetCondition(condition, engine, Af, Y_h2o)
+plt.plot([p1.real.magnitude,p2.real.magnitude], [scale.magnitude*y0_raw-p1.imag.magnitude,scale.magnitude*y0_raw-p2.imag.magnitude])
+print(y0_raw*scale*1j-p1,y0_raw*scale*1j-p2)
+Ab = abs(np.pi*L*(p1.imag+p2.imag-2*y0_raw*scale))
+Ac = scale**2*abs(np.pi*((paths[4].start.imag-y0_raw)**2 - (paths[4].end.imag-y0_raw)**2))
+
+jet = JetCondition(condition, engine, Af, Ab, Ac, Y_h2o)
 Ab_des = jet.Ab.to_base_units()
 Ac_des = jet.Ac.to_base_units()
-
 
 
 # # outer radius stays same
@@ -108,6 +99,7 @@ for i, key in enumerate(lines.keys()):
     for j, segment in enumerate(paths[i]):
         pts = scale * segment.poly()(t[j > 0:])
         [lines[key].append(Point2D(pt)) for pt in zip(pts.real.magnitude, pts.imag.magnitude)]
+
 # core tail outer needs reversing to match syntax: x increasing
 lines["core_tail_outer"] = lines["core_tail_outer"][::-1]
 tedges = []
@@ -119,7 +111,7 @@ lines["nacelle"][0].x = lines["fan_iface"][0].x
 lines["fan_iface"][0] = lines["nacelle"][0]
 # te
 # tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"],te_thickness)])
-lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
+# lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
 lines["bypass_tail_outer"][0].x = lines["bypass_iface"][0].x
 lines["bypass_iface"][0] = lines["bypass_tail_outer"][0]
 
@@ -127,7 +119,7 @@ lines["bypass_tail_inner"][0].x = lines["bypass_iface"][-1].x
 lines["bypass_iface"][-1] = lines["bypass_tail_inner"][0]
 # te
 # tedges.append(["bypass_tail_inner", "core_tail_outer"][cut_te(lines["bypass_tail_inner"], lines["core_tail_outer"],te_thickness)])
-lines["bypass_tail_inner"][-1] = lines["core_tail_outer"][-1]
+# lines["bypass_tail_inner"][-1] = lines["core_tail_outer"][-1]
 lines["core_tail_outer"][0].x = lines["core_iface"][-1].x
 lines["core_iface"][-1] = lines["core_tail_outer"][0]
 
@@ -138,10 +130,8 @@ lines["core_tail_inner"][-1].x = lines["tail_zero_rad"][0].x
 lines["tail_zero_rad"][0] = lines["core_tail_inner"][-1]
 
 y0 = lines["centreline"][0].y.magnitude
-# Ab = np.pi * ((lines["bypass_iface"][0].y.magnitude - y0) ** 2 - (lines["bypass_iface"][-1].y.magnitude - y0) ** 2)
-# Ac = np.pi * ((lines["core_iface"][-1].y.magnitude - y0) ** 2 - (lines["core_iface"][0].y.magnitude - y0) ** 2)
-# print(f"{Ab = :f}\n{Ac = :f}")
-with open("CAD/lines.txt", "w") as f:
+
+with open("geom/lines.txt", "w") as f:
     f.write(f'3d=true\nfit=true\n')
     for i, key in enumerate(lines.keys()):
         plt.plot([point.x.magnitude for point in lines[key]], [y0 - point.y.magnitude for point in lines[key]], '-',
@@ -203,10 +193,10 @@ bc = BoundaryCondition(M=condition.M,
                        Fnet=jet.Fnet,
                        h0_bypass=jet.station_03b.H_mass()+jet.h_ref.magnitude,
                        nu_bypass=nu_bypass,
-                       A_bypass=abs(np.pi*((lines["bypass_iface"][0].y.magnitude-y0)**2 - (lines["bypass_iface"][-1].y.magnitude-y0)**2)),
+                       A_bypass=Ab,
                        h0_core=jet.station_05.H_mass()+jet.h_ref.magnitude,
                        nu_core=nu_core,
-                       A_core=abs(np.pi*((lines["core_iface"][0].y.magnitude-y0)**2 - (lines["core_iface"][-1].y.magnitude-y0)**2)),
+                       A_core=Ac,
                        Y_h2o_core=jet.zs_exhaust[0],
                        p_fan=jet.p1,
                        A_fan=abs(np.pi*((lines["fan_iface"][0].y.magnitude-y0)**2 - (lines["fan_iface"][-1].y.magnitude-y0)**2)),
@@ -214,7 +204,7 @@ bc = BoundaryCondition(M=condition.M,
                        bl_bypass_core=BL2,
                        bl_core_tail=BL3,
                        bl_wake=BL4)
-with open("../geom/boundary_conditions.json", "w", encoding='utf-8') as f:
+with open("geom/boundary_conditions.json", "w", encoding='utf-8') as f:
     json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
 
 for tedge in tedges:
