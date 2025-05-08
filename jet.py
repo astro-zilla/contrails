@@ -134,44 +134,46 @@ class JetCondition:
         # EGT can be 15-25% for cooling - taken after HPC
         # epsilon Tg-Tm / Tg-Tc for cooling is around 0.6-0.7
         # station 1 - inlet
-        station_01 = self.flasher.flash(
+        station_0_0 = self.flasher.flash(
             T=fc.T0.magnitude,
             P=fc.p0.to('Pa').magnitude,
             zs=self.zs_air
         )
 
         # station 2 - fan exit
-        station_02 = self.flasher.flash(
-            T=station_01.T * (r_pf * r_p_mult) ** ((self.gam_a - 1) / (self.gam_a * self.engine.eta_f)),
-            P=station_01.P * (r_pf * r_p_mult),
+        station_13_0 = self.flasher.flash(
+            T=station_0_0.T * (r_pf * r_p_mult) ** ((self.gam_a - 1) / (self.gam_a * self.engine.eta_f)),
+            P=station_0_0.P * (r_pf * r_p_mult),
             zs=self.zs_air
         )
 
         # station 3b - bypass exit total
-        station_03b = self.flasher.flash(
-            T=station_02.T,
-            P=station_02.P,
+        station_19_0 = self.flasher.flash(
+            T=station_13_0.T,
+            P=station_13_0.P,
             zs=self.zs_air
         )
 
         # station 3b - bypass exit static
-        p3star = station_03b.P * (1 + (self.gam_a - 1) / 2) ** -(self.gam_a / (self.gam_a - 1))
-        p3ext = (self.engine.cp_bypass * (fc.p0 - fc.p) + fc.p).to('Pa').magnitude
+        p3star = station_19_0.P * (1 + (self.gam_a - 1) / 2) ** -(self.gam_a / (self.gam_a - 1))
+        p3ext = (self.engine.cp_bypass * fc.q_inf / np.sqrt(1 - self.fc.M ** 2) + fc.p).to('Pa').magnitude
         p3b = max(p3star, p3ext)
-        station_3b = self.flasher.flash(
-            T=station_03b.T * (p3b / station_03b.P) ** ((self.gam_a - 1) / self.gam_a),
+        # isentropic expansion to p3b
+        station_19 = self.flasher.flash(
+            S_mass = station_19_0.S_mass(),
             P=p3b,
             zs=self.zs_air
         )
 
+
         # station 3 - compressor exit
-        station_03 = self.flasher.flash(
-            T=station_02.T * (r_pc * r_p_mult) ** ((self.gam_a - 1) / (self.gam_a * self.engine.eta_c)),
-            P=station_02.P * (r_pc * r_p_mult),
+        station_3_0 = self.flasher.flash(
+            T=station_13_0.T * (r_pc * r_p_mult) ** ((self.gam_a - 1) / (self.gam_a * self.engine.eta_c)),
+            P=station_13_0.P * (r_pc * r_p_mult),
             zs=self.zs_air
         )
 
-        return station_01, station_02, station_03, station_03b, station_3b
+        return station_0_0, station_13_0, station_3_0, station_19_0, station_19
 
     def mdots(self, station_01, station_02, station_03, station_03b, station_3b, cruise=True):
         if cruise:
@@ -196,12 +198,12 @@ class JetCondition:
 
         return mdotb.magnitude, mdotc.magnitude, (F * sfc).magnitude, Vjb, Vjc
 
-    def __init__(self, flight_condition: FlightCondition, engine: Engine, Af: float, Ab: float, Ac: float, Y_h2o: float):
+    def __init__(self, flight_condition: FlightCondition, engine: Engine, Af: float, Ajb: float, Ajc: float, Y_h2o: float):
         self.fc = flight_condition
         self.engine = engine
         self.Af = Af
-        self.Ab = Ab
-        self.Ac = Ac
+        self.Ab = Ajb
+        self.Ac = Ajc
         self.h_ref = 297931 * unit('J/kg')
 
         # chemistry
@@ -214,7 +216,7 @@ class JetCondition:
         self.zs_air = [0, 0, 0.21, 0.79]
 
         LD = 18  # A320
-        L = 70000 * 0.00981 * unit('kN')  # A320 55000
+        L = 55000 * 0.00981 * unit('kN')  # A320 70000
         self.Fnet = L / LD / 2
 
         self.gam_e = 1.31
@@ -224,25 +226,25 @@ class JetCondition:
         self.cP_a = 1005 * unit('kg.m^2/s^2/kg/K')
 
         self.calibrate_fan_sl()
-        self.engine.r_pf=1.4
+        print(f"r_pf = {self.engine.r_pf}")
         self.calibrate_PR_cruise()
-        # bypass conditions
-        self.station_01, self.station_02, self.station_03, self.station_03b, self.station_3b = self.bypass_conditions()
+        # bypass conditions station_0_0, station_13_0, station_3_0, station_19_0, station_19
+        self.station_0_0, self.station_13_0, self.station_3_0, self.station_19_0, self.station_19 = self.bypass_conditions()
         # mass flows
-        mdotb, mdotc, mdotf, Vjb, Vjc = self.mdots(self.station_01, self.station_02, self.station_03, self.station_03b,
-                                         self.station_3b)
+        mdotb, mdotc, mdotf, self.Vjb, self.Vjc = self.mdots(self.station_0_0, self.station_13_0, self.station_3_0, self.station_19_0,
+                                                             self.station_19)
+        self.mdot = mdotc+mdotb
 
         # station 4 - combustor exit
         self.zs_exhaust = get_exhaust_comp(AFR=(mdotc / mdotf), fuel=engine.fuel, Y_h2o=Y_h2o)
         Q = mdotf * engine.fuel.LCV
-        wfan = (self.station_02.H_mass() - self.station_01.H_mass())
-        wcomp = (self.station_03.H_mass() - self.station_02.H_mass())
+        wfan = (self.station_13_0.H_mass() - self.station_0_0.H_mass())
+        wcomp = (self.station_3_0.H_mass() - self.station_13_0.H_mass())
 
-        print(wfan,wcomp)
 
-        self.station_04 = self.flasher.flash(
-            H_mass=self.station_03.H_mass() + Q.magnitude / mdotc,
-            P=0.99 * self.station_03.P,
+        self.station_4_0 = self.flasher.flash(
+            H_mass=self.station_3_0.H_mass() + Q.to_base_units().magnitude / mdotc,
+            P=0.99 * self.station_3_0.P,
             zs=self.zs_exhaust
         )
 
@@ -250,71 +252,92 @@ class JetCondition:
         # this is all we need for the boundary condition - rest is for interest and boundary layer calc
         # iterate as we don't know p05
         # guess...
-        p05 = self.station_04.P
+        p05 = self.station_4_0.P
         T05 = None
-        for i in range(2):
+        for i in range(4):
 
-            self.station_05 = self.flasher.flash(
-                H_mass=self.station_04.H_mass() - wcomp - wfan,
+            self.station_5_0 = self.flasher.flash(
+                H_mass=self.station_4_0.H_mass() - wcomp - self.engine.BPR * wfan,
                 P=p05,
                 zs=self.zs_exhaust
             )
-            T05 = self.station_05.T
-            p05 = self.station_04.P / (self.station_04.T / self.station_05.T) ** (
+            T05 = self.station_5_0.T
+            p05 = self.station_4_0.P / (self.station_4_0.T / self.station_5_0.T) ** (
                     self.gam_e / (self.gam_e - 1) / engine.eta_t)
 
-        T5 = T05 - 0.5 / self.cP_e.magnitude * Vjc ** 2
-        Mjc = Vjc / np.sqrt(self.gam_e * self.R.magnitude * T5)
+        T5 = T05 - 0.5 / self.cP_e.magnitude * self.Vjc ** 2
+        Mjc = self.Vjc / np.sqrt(self.gam_e * self.R.magnitude * T5)
 
         # exit areas from assumption that bypass is choked and core exits at ambient pressure
 
         # @incollection{HOUGHTON2013427, title = {Chapter 7 - Airfoils and Wings in Compressible Flow}, editor = {E.L. Houghton and P.W. Carpenter and Steven H. Collicott and Daniel T. Valentine}, booktitle = {Aerodynamics for Engineering Students (Sixth Edition)}, publisher = {Butterworth-Heinemann}, edition = {Sixth Edition}, address = {Boston}, pages = {427-477}, year = {2013}, isbn = {978-0-08-096632-8}, doi = {https://doi.org/10.1016/B978-0-08-096632-8.00007-2}, url = {https://www.sciencedirect.com/science/article/pii/B9780080966328000072}, author = {E.L. Houghton and P.W. Carpenter and Steven H. Collicott and Daniel T. Valentine}, keywords = {critical Mach number, linearized subsonic flow, linearized supersonic flow, Prandtl-Glauert rule, compressibility correction, small disturbance theory, supersonic wings, wing sweep, Ackert's rule}, abstract = {Publisher Summary: The chapter discusses the subsonic linearized compressible flow theory for extending the trusted results from incompressible flow into high subsonic flight. The most sweeping approximations, producing the simplest solutions, are made here and result in soluble linear differential equations. This leads to the expression linearized theory associated with airfoils. The chapter summarizes the supersonic linearized theory such as symmetrical double wedge airfoil in supersonic flow, supersonic biconvex circular arc airfoil in supersonic flow, general airfoil section, airfoil section made up of unequal circular arcs, double-wedge airfoil section. Several other aspects of supersonic wings such as the shock-expansion approximation, wings of finite span, computational methods are also presented in this chapter. The compressible-flow equations in various forms are considered in order to predict the behavior of airfoil sections in high sub- and supersonic flows. The wings in compressible flow, such as transonic flow, subcritical flow, supersonic linearized theory, and other aspects of supersonic wings are discussed in this chapter. The analysis of this regime involves solving a set of nonlinear differential equations, a task that demands either advanced computational techniques or some form of approximation. The approximations come about mainly from assuming that all disturbances are small disturbances or small perturbations to the free-stream flow conditions. The chapter also explores the phenomenon of wave drag in supersonic flight and how it is predicted by both the shock-expansion method and linearized supersonic flow.}}
-        cp = 0.0
-        p_core_exit = self.fc.q_inf * cp / np.sqrt(1 - self.fc.M ** 2) + self.fc.p
-        Ab = mdotb * np.sqrt(self.cP_a * self.station_03b.T) / 1.281 / self.station_03b.P
-        Ac = mdotc * np.sqrt(self.cP_e * T05) / (
-                self.gam_e / np.sqrt(self.gam_e - 1) * Mjc * (1 + (self.gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / p_core_exit
 
-        # station 1 - intake
-        f = (mdotb + mdotc) * np.sqrt(self.cP_a.magnitude * self.station_01.T) / self.Af.magnitude / self.station_01.P
 
-        def f0(M, ga):
+        def f0(M, f, ga):
             return f - ga / np.sqrt(ga - 1) * M * (1 + (ga - 1) / 2 * M ** 2) ** (-0.5 * (ga + 1) / (ga - 1))
 
-        M1 = root_scalar(f0, (self.gam_a,), bracket=[0, 1]).root
-        self.p1 = self.station_01.P * (1 + (self.gam_a - 1) / 2 * M1 ** 2) ** -(self.gam_a / (self.gam_a - 1))
-        V1 = np.sqrt(self.cP_a * self.station_01.T) * (self.gam_a - 1) * M1 * (1 + (self.gam_a - 1) / 2 * M1 ** 2) ** -0.5
-        U1 = self.engine.N1.to_base_units() * self.engine.D / 2
+        # approximate isentropic expansion to ambient for bypass:
+        station_jb = self.flasher.flash(
+            S_mass=self.station_19_0.S_mass(),
+            P=self.fc.p.magnitude,
+            zs=self.zs_air
+        )
+        Mjb = (((station_jb.P / self.station_19_0.P) ** (-(self.gam_a - 1) / self.gam_a) - 1) * 2 / (
+                self.gam_a - 1)) ** 0.5
+        Ajb = mdotb * np.sqrt(self.cP_a * self.station_19_0.T) / (
+                self.gam_a / np.sqrt(self.gam_a - 1) * Mjb * (1 + (self.gam_a - 1) / 2 * Mjb ** 2) ** 0.5) / self.fc.p
+
+        # approximate isentropic expansion to ambient for core:
+        station_jc = self.flasher.flash(
+            S_mass=self.station_5_0.S_mass(),
+            P=self.fc.p.magnitude,
+            zs=self.zs_exhaust
+        )
+        Mjc = (((station_jc.P / self.station_5_0.P) ** (-(self.gam_e - 1) / self.gam_e) - 1) * 2 / (
+                self.gam_e - 1)) ** 0.5
+        Ajc = mdotc * np.sqrt(self.cP_e * self.station_5_0.T) / (
+                self.gam_e / np.sqrt(self.gam_e - 1) * Mjc * (1 + (self.gam_e - 1) / 2 * Mjc ** 2) ** 0.5) / self.fc.p
+
+        # station 1 - intake
+        f2 = (mdotb + mdotc) * np.sqrt(self.cP_a.magnitude * self.fc.T0.magnitude) / self.Af.magnitude / self.fc.p0.magnitude
+
+        M2 = root_scalar(f0, (f2, self.gam_a,), bracket=[0, 1]).root
+        self.p2 = self.station_0_0.P * (1 + (self.gam_a - 1) / 2 * M2 ** 2) ** -(self.gam_a / (self.gam_a - 1))
+        V2 = np.sqrt(self.cP_a * self.station_0_0.T) * (self.gam_a - 1) * M2 * (1 + (self.gam_a - 1) / 2 * M2 ** 2) ** -0.5
+        U2 = self.engine.N1.to_base_units() * self.engine.D / 2
 
         # jet dimensions for wake estimation
-        Aj = Ab.magnitude + Ac.magnitude
+        Aj = Ajb.magnitude + Ajc.magnitude
         rj = np.sqrt(Aj / (2 * np.pi))
         rc = np.sqrt(self.Ac / (2 * np.pi))
 
+        print(self.Af.magnitude * V2 * self.fc.rho.magnitude, self.Ab * self.Vjb * self.station_19.rho_mass(), self.Ac * self.Vjc * self.station_5_0.rho_mass())
         print(f"""
         BYPASS:
-          p03b = {self.station_03b.P}
-          h03b = {(self.station_03b.H_mass() + self.h_ref.magnitude)}
+          p19_0 = {self.station_19_0.P}
+          h19_0 = {(self.station_19_0.H_mass() + self.h_ref.magnitude)}
           Ab = {self.Ab.to_base_units():.5g~P}
           
         CORE:
           wH2O = {self.zs_exhaust[0]:.5g}
-          p05 = {p05}
-          h05 = {(self.station_05.H_mass() + self.h_ref.magnitude)}
+          p09 = {p05}
+          h09 = {(self.station_5_0.H_mass() + self.h_ref.magnitude)}
           Ac = {self.Ac.to_base_units():.5g~P}
         
         INTAKE:
-          M2 = {M1}
-          p2 = {self.p1}
-          V2 = {V1}
-          U2 = {U1}
-          phi2 = {(V1 / U1).magnitude: .5g}
+          M2 = {M2}
+          p2 = {self.p2}
+          V2 = {V2},{self.fc.TAS}
+          U2 = {U2}
+          phi2 = {(V2 / U2).magnitude: .5g}
         
         TOTAL:
           rc = {rc}
           rj = {rj}
+          Vjb = {self.Vjb}
+          Vjc = {self.Vjc}
           mdot = {mdotc} + {mdotb} = {(mdotb + mdotc)}
-          F = {self.Fnet}
+          F = {self.Fnet},{(mdotb*self.Vjb+mdotc*self.Vjc-(mdotb+mdotc)*V2.magnitude+self.Ab.magnitude*self.station_19.P-self.Af.magnitude*self.p2)/1000}
         """)
 
 # give bypass ratio and fan area in filename so paraview script can run jet with correct params
