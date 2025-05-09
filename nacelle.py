@@ -230,6 +230,7 @@ bc = BoundaryCondition(M=condition.M,
 with open("geom/boundary_conditions.json", "w", encoding='utf-8') as f:
     json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
 
+
 for tedge in tedges:
     print(
         f"trailing edge thickness on {tedge} = {1000 * abs(lines[tedge][-2].y.magnitude - lines[tedge][-1].y.magnitude):.2f}mm")
