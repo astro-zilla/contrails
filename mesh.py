@@ -11,35 +11,38 @@ from setup import BoundaryCondition
 t0 = time.time()
 
 
-def surface_mesh(model):
+def surface_mesh(model: prime.Model):
     # start prime meshing
     io = prime.FileIO(model)
+
     import_params = prime.ImportCadParams(model, cad_reader_route=prime.CadReaderRoute.WORKBENCH)
 
 
     # import cad
-    io.import_cad("geom/nacelle.scdoc", params=import_params)
+    print("importing CAD")
+    io.import_cad("geom/nacelle-pylon.scdoc", params=import_params)
     nacelle = model.parts[0]
-    print(f"imported {nacelle.name} with {len(nacelle.get_topo_faces())} faces at {time.time() - t0:.2f} seconds")
+    print(nacelle)
+    print(f"imported {nacelle.name} with {len(list(nacelle.get_topo_faces()))} faces at {time.time() - t0:.2f} seconds")
 
     # global size control
     model.set_global_sizing_params(prime.GlobalSizingParams(model, min=3.0, max=80000, growth_rate=1.2))
 
     # wake size control
     wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
-    wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=17.3))
-    wake_size_control.set_scope(prime.ScopeDefinition(model,label_expression="wake_*er_internal"))
+    wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
+    wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="wake_*er_internal"))
     print(f"created wake size control {wake_size_control.id}")
 
     # curvature size controls
     walls_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
     walls_size_control.set_curvature_sizing_params(prime.CurvatureSizingParams(model, min=3.0, max=220.0, normal_angle=4.0))
-    walls_size_control.set_scope(prime.ScopeDefinition(model, label_expression="*_wall"))
+    walls_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="*_wall"))
     print(f"created wall size control {walls_size_control.id}")
     freestream_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
     freestream_size_control.set_curvature_sizing_params(
         prime.CurvatureSizingParams(model, min=25120, max=80000, normal_angle=18.0))
-    freestream_size_control.set_scope(prime.ScopeDefinition(model, label_expression="freestream"))
+    freestream_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="freestream"))
     print(f"created freestream size control {freestream_size_control.id}")
 
     # proximity size control
@@ -48,7 +51,7 @@ def surface_mesh(model):
         prime.ProximitySizingParams(model, min=3.0, max=80000, growth_rate=1.2,
                                     elements_per_gap=4, ignore_orientation=True,
                                     ignore_self_proximity=False))
-    proximity_size_control.set_scope(prime.ScopeDefinition(model, label_expression="*_wall"))
+    proximity_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="*_wall"))
 
     # compute size field
     size_field = prime.SizeField(model)
@@ -72,10 +75,10 @@ def surface_mesh(model):
     print(f"meshed {len(wall_faces)} wall faces")
 
     # mesh wakes
-    wake_params = prime.SurferParams(model=model, generate_quads=True, constant_size=18.7)
+    wake_params = prime.SurferParams(model=model, generate_quads=True, size_field_type=prime.SizeFieldType.VOLUMETRIC)
     wake_faces = nacelle.get_topo_faces_of_label_name_pattern("wake_*er_internal", prime.NamePatternParams(model))
     surfer.mesh_topo_faces(nacelle.id, wake_faces, wake_params)
-    print(f"meshed {len(wall_faces)} wake faces")
+    print(f"meshed {len(wake_faces)} wake faces")
 
     # mesh freestream
     freestream_params = prime.SurferParams(model=model, size_field_type=prime.SizeFieldType.VOLUMETRIC)
@@ -186,15 +189,20 @@ def volume_mesh(model, prism_control_ids, volume_control_ids):
     print(f"completed volume meshing at {time.time() - t0:.2f} seconds")
 
 
-with prime.launch_prime(n_procs=4, timeout=20) as prime_client:
+with prime.launch_prime() as prime_client:
     # prime_client = prime.launch_prime(n_procs=4, timeout=20)
-
     model = prime_client.model
+
     surface_mesh(model)
     volume_control_ids = setup_volume_controls(model)
     prism_control_ids = setup_bl_controls(model)
 
     prime.FileIO(model).write_pmdat("geom/nacelle.pmdat", prime.FileWriteParams(model))
+    display = graphics.Graphics(model)
+    display(model.parts, update=True, scope=prime.ScopeDefinition(model,entity_type=prime.ScopeEntity.FACEZONELETS))
+    print("saved nacelle.pmdat")
+
+
     volume_mesh(model, prism_control_ids, volume_control_ids)
 
     print(model.parts[0].get_summary(prime.PartSummaryParams(model)))
@@ -204,5 +212,5 @@ with prime.launch_prime(n_procs=4, timeout=20) as prime_client:
     prime.FileIO(model).export_fluent_case("geom/nacelle.cas", prime.ExportFluentCaseParams(model, cff_format=False))
     print("exported nacelle.cas")
 
-    display = graphics.Graphics(model)
-    display(model.parts, update=True)
+
+    display(model.parts, update=True, scope=prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEZONELETS))
