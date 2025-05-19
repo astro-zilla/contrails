@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import time
+import logging
 
 import ansys.meshing.prime as prime
 import ansys.meshing.prime.graphics as graphics
@@ -15,15 +16,28 @@ def surface_mesh(model: prime.Model):
     # start prime meshing
     io = prime.FileIO(model)
 
-    import_params = prime.ImportCadParams(model, cad_reader_route=prime.CadReaderRoute.WORKBENCH)
+    import_params = prime.ImportCadParams(
+        model, cad_reader_route=prime.CadReaderRoute.WORKBENCH,
+        refacet=True, cad_refaceting_params=prime.CadRefacetingParams(
+            model,prime.CadFaceter.PARASOLID,custom_normal_angle_tolerance=4)
+    )
+
 
 
     # import cad
     print("importing CAD")
-    io.import_cad("geom/nacelle-pylon.scdoc", params=import_params)
+    io.import_cad("geom/nacelle.scdoc", params=import_params)
     nacelle = model.parts[0]
     print(nacelle)
+    print(nacelle.get_face_zonelets())
     print(f"imported {nacelle.name} with {len(list(nacelle.get_topo_faces()))} faces at {time.time() - t0:.2f} seconds")
+
+
+    # display = graphics.Graphics(model)
+    # display(model.parts, update=True, scope=prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEZONELETS))
+
+
+
 
     # global size control
     model.set_global_sizing_params(prime.GlobalSizingParams(model, min=3.0, max=80000, growth_rate=1.2))
@@ -69,13 +83,14 @@ def surface_mesh(model: prime.Model):
     print(f"meshed {len(iface_faces)} iface faces")
 
     # mesh walls
-    wall_params = prime.SurferParams(model=model, generate_quads=True, size_field_type=prime.SizeFieldType.VOLUMETRIC)
+    wall_params = prime.SurferParams(model=model, generate_quads=False, size_field_type=prime.SizeFieldType.VOLUMETRIC)
     wall_faces = nacelle.get_topo_faces_of_label_name_pattern("*_wall", prime.NamePatternParams(model))
+
     surfer.mesh_topo_faces(nacelle.id, wall_faces, wall_params)
     print(f"meshed {len(wall_faces)} wall faces")
 
     # mesh wakes
-    wake_params = prime.SurferParams(model=model, generate_quads=True, size_field_type=prime.SizeFieldType.VOLUMETRIC)
+    wake_params = prime.SurferParams(model=model, generate_quads=False, size_field_type=prime.SizeFieldType.VOLUMETRIC)
     wake_faces = nacelle.get_topo_faces_of_label_name_pattern("wake_*er_internal", prime.NamePatternParams(model))
     surfer.mesh_topo_faces(nacelle.id, wake_faces, wake_params)
     print(f"meshed {len(wake_faces)} wake faces")
@@ -113,11 +128,11 @@ def setup_volume_controls(model):
     wake_control = model.control_data.create_volume_control()
     wake_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES,
                                                  zone_expression=f"wake_outer_internal,wake_inner_internal"))
-    wake_control.set_params(prime.VolumeControlParams(model, prime.CellZoneletType.FLUID))
+    wake_control.set_params(prime.VolumeControlParams(model, prime.CellZoneletType.FLUID, skip_hexcore=True))
     freestream_control = model.control_data.create_volume_control()
     freestream_control.set_scope(
         prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES, zone_expression=f"freestream"))
-    freestream_control.set_params(prime.VolumeControlParams(model, prime.CellZoneletType.FLUID))
+    freestream_control.set_params(prime.VolumeControlParams(model, prime.CellZoneletType.FLUID, skip_hexcore=True))
     dead_control = model.control_data.create_volume_control()
     dead_control.set_scope(
         prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES, zone_expression=f"nacelle_wall"))
@@ -179,7 +194,7 @@ def volume_mesh(model, prism_control_ids, volume_control_ids):
     automesh_params = prime.AutoMeshParams(
         model,
         size_field_type=prime.SizeFieldType.VOLUMETRIC,
-        volume_fill_type=prime.VolumeFillType.TET,
+        volume_fill_type=prime.VolumeFillType.POLY,
         prism_control_ids=prism_control_ids,
         volume_control_ids=volume_control_ids
     )
@@ -188,16 +203,52 @@ def volume_mesh(model, prism_control_ids, volume_control_ids):
     prime.AutoMesh(model).mesh(part_id=model.parts[0].id, automesh_params=automesh_params)
     print(f"completed volume meshing at {time.time() - t0:.2f} seconds")
 
+class CustomFormatter(logging.Formatter):
 
-with prime.launch_prime() as prime_client:
+    grey = "\x1b[38;20m"
+    yellow = "\x1b[33;20m"
+    red = "\x1b[31;20m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+
+    FORMATS = {
+        logging.DEBUG: grey + format + reset,
+        logging.INFO: grey + format + reset,
+        logging.WARNING: yellow + format + reset,
+        logging.ERROR: red + format + reset,
+        logging.CRITICAL: bold_red + format + reset
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
+with prime.launch_prime(n_procs=8,timeout=60) as prime_client:
     # prime_client = prime.launch_prime(n_procs=4, timeout=20)
     model = prime_client.model
 
+    model.python_logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    # Create formatter for message output
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    # Add formatter to ch stream handler
+    ch.setFormatter(formatter)
+    model.python_logger.addHandler(ch)
+
+
     surface_mesh(model)
+    prime.FileIO(model).write_pmdat("geom/nacelle.pmdat", prime.FileWriteParams(model))
+    # prime.FileIO(model).read_pmdat("geom/nacelle.pmdat", prime.FileReadParams(model))
+
     volume_control_ids = setup_volume_controls(model)
     prism_control_ids = setup_bl_controls(model)
 
-    prime.FileIO(model).write_pmdat("geom/nacelle.pmdat", prime.FileWriteParams(model))
+    
     display = graphics.Graphics(model)
     display(model.parts, update=True, scope=prime.ScopeDefinition(model,entity_type=prime.ScopeEntity.FACEZONELETS))
     print("saved nacelle.pmdat")
