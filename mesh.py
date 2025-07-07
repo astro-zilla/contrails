@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import ansys.meshing.prime as prime
-import ansys.meshing.prime.graphics as graphics
+
 
 import pyvista as pv
 from ansys.meshing.prime.autogen.meshinfo import MeshInfo
@@ -41,8 +41,9 @@ def surface_mesh(model: prime.Model,fname: Path,wakes: bool = True):
     print(nacelle)
     print(nacelle.get_face_zonelets())
     print(f"imported {nacelle.name} with {len(list(nacelle.get_topo_faces()))} faces at {time.time() - t0:.2f} seconds")
-
-    display = graphics.Graphics(model)
+    if not args.no_display:
+        import ansys.meshing.prime.graphics as graphics
+        display = graphics.Graphics(model)
 
 
     # global size control
@@ -104,12 +105,15 @@ def surface_mesh(model: prime.Model,fname: Path,wakes: bool = True):
 
     wrapper = prime.Wrapper(model)
 
-    improve_quality_params = prime.WrapperImproveQualityParams(model,resolve_intersections=True,resolve_invalid_node_normals=True,resolve_spikes=True,number_of_threads=8)
-    # close_gaps_params = prime.WrapperCloseGapsParams(model,target=prime.ScopeDefinition(model),gap_size=6.0,create_new_part=False,material_point_name="nacelle")
 
+    # close_gaps_params = prime.WrapperCloseGapsParams(model,target=prime.ScopeDefinition(model),gap_size=6.0,create_new_part=False,material_point_name="nacelle")
     # create_material_points(model)
     # wrapper.close_gaps(prime.ScopeDefinition(model, label_expression="* !freestream"),close_gaps_params)
-    # wrapper.improve_quality(nacelle.id,improve_quality_params)
+
+    improve_quality_params = prime.WrapperImproveQualityParams(model, resolve_intersections=True,
+                                                               resolve_invalid_node_normals=True, resolve_spikes=True,
+                                                               number_of_threads=2)
+    wrapper.improve_quality(nacelle.id,improve_quality_params)
 
 
     # compute new volumes
@@ -229,13 +233,15 @@ def create_material_points(model: prime.Model,wakes: bool = True):
 
 def main(args):
     fname = Path(args.fname)
-    with (prime.launch_prime(n_procs=2,timeout=60) as prime_client):
+    with (prime.launch_prime(n_procs=args.processes,timeout=60) as prime_client):
 
         model = prime_client.model
         print(f"default number of threads: {model.get_num_threads()}")
-        model.set_num_threads(32)
+        model.set_num_threads(args.threads)
         print(f"new number of threads: {model.get_num_threads()}")
-        display = graphics.Graphics(model)
+        if not args.no_display:
+            import ansys.meshing.prime.graphics as graphics
+            display = graphics.Graphics(model)
 
         model.python_logger.setLevel(logging.DEBUG)
         ch = logging.StreamHandler(stream=sys.stdout)
@@ -249,10 +255,7 @@ def main(args):
         model.python_logger.addHandler(ch)
 
 
-        surface_mesh(model,fname,not args.nowake)
-
-
-
+        surface_mesh(model,fname,not args.no_wake)
         # check surface mesh quality before proceeding to volume meshing
         summary = model.parts[0].get_summary(prime.PartSummaryParams(model))
         print("Part summary:", summary)
@@ -264,10 +267,10 @@ def main(args):
         print(f"saved {str(fname.with_suffix('.pmdat'))}")
         # prime.FileIO(model).read_pmdat("geom/nacelle.pmdat", prime.FileReadParams(model))
 
-        volume_control_ids = setup_volume_controls(model,not args.nowake)
-        prism_control_ids = setup_bl_controls(model,not args.nowake)
-
-        display(model.parts, update=True, scope=prime.ScopeDefinition(model,entity_type=prime.ScopeEntity.FACEZONELETS))
+        volume_control_ids = setup_volume_controls(model,not args.no_wake)
+        prism_control_ids = setup_bl_controls(model,not args.no_wake)
+        if not args.no_display:
+            display(model.parts, update=True, scope=prime.ScopeDefinition(model,entity_type=prime.ScopeEntity.FACEZONELETS))
         print(prism_control_ids)
         nw = [pc for pc in model.control_data.prism_controls if pc.id == prism_control_ids[0]][0]
         print(nw.get_surface_scope())
@@ -293,13 +296,16 @@ def main(args):
         search = prime.VolumeSearch(model)
         print("Volume mesh quality summary:", search.get_volume_quality_summary(prime.VolumeQualitySummaryParams(model)))
 
-
-        display(model.parts, update=True, scope=prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEZONELETS))
+        if not args.no_display:
+            display(model.parts, update=True, scope=prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEZONELETS))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Generate a surface mesh for a geometry using Ansys Meshing Prime.")
     parser.add_argument("fname", help="path to .scdoc file")
-    parser.add_argument("--nowake", action="store_true", help="do not mesh the wake")
+    parser.add_argument("--no-display", action="store_true", help="do not display the mesh in a window")
+    parser.add_argument("-p", "--processes", type=int, default=8, help="number of processes to use for meshing")
+    parser.add_argument("-t", "--threads", type=int, default=2, help="number of threads to use for meshing")
+    parser.add_argument("--no-wake", action="store_true", help="do not mesh the wake")
     args = parser.parse_args()
 
     main(args)
