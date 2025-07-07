@@ -52,9 +52,9 @@ def get_distances_to_normal_intersection(t1:float, t2:float, segment1:CubicBezie
     if tt1 is None or tt2 is None:
         return None
 
-    # calculate distances
-    d1 = abs(b1 * tt1)
-    d2 = abs(b2 * tt2)
+    # calculate distances (signed such that the intersection lies between the lines)
+    d1 = abs(b1 * tt1) * -tt1/abs(tt1)
+    d2 = abs(b2 * tt2) * tt2/abs(tt2)
     return d1, d2
 
 def plot(segment):
