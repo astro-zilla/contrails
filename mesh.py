@@ -95,14 +95,16 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True):
 
     wrapper = prime.Wrapper(model)
 
+    # todo can;t get the material points correct for this but it's not required for simple meshes
     # close_gaps_params = prime.WrapperCloseGapsParams(model,target=prime.ScopeDefinition(model),gap_size=6.0,create_new_part=False,material_point_name="nacelle")
     # create_material_points(model)
     # wrapper.close_gaps(prime.ScopeDefinition(model, label_expression="* !freestream"),close_gaps_params)
 
-    improve_quality_params = prime.WrapperImproveQualityParams(model, resolve_intersections=True,
-                                                               resolve_invalid_node_normals=True, resolve_spikes=True,
-                                                               number_of_threads=2)
-    wrapper.improve_quality(nacelle.id, improve_quality_params)
+    # todo this hangs and fails, could be to do with number of threads
+    # improve_quality_params = prime.WrapperImproveQualityParams(model, resolve_intersections=True,
+    #                                                            resolve_invalid_node_normals=True, resolve_spikes=True,
+    #                                                            number_of_threads=32)
+    # wrapper.improve_quality(nacelle.id, improve_quality_params)
 
     # compute new volumes
     print(nacelle.compute_topo_volumes(
@@ -110,16 +112,6 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True):
                                    prime.VolumeNamingType.BYFACELABEL,
                                    prime.CreateVolumeZonesType.PERNAMESOURCE)))
     print(nacelle)
-
-    # volume size controls
-    # wake_volume_size_control = model.control_data.create_size_control(prime.SizingType.BOI)
-    # wake_volume_size_control.set_boi_sizing_params(prime.BoiSizingParams(model, max=25.0, growth_rate=1.2))
-    # wake_volume_size_control.set_scope(
-    #     prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="bypass_*,core_*,wake_outer_internal,wake*_enclosure_internal"))
-    # size_field.compute_volumetric(
-    #     [control.id for control in model.control_data.size_controls],
-    #     prime.VolumetricSizeFieldComputeParams(model))
-    # print(f"recomputed size field {size_field}")
 
 
 def setup_volume_controls(model, wakes: bool = True):
@@ -159,6 +151,7 @@ def setup_bl_controls(model, wakes: bool = True):
                                                                 growth_rate=bcs.bl_nacelle_bypass.GR,
                                                                 n_layers=bcs.bl_nacelle_bypass.n)
                                  )
+    # ideally use 4 different bl setups but the mesher doesn't like it
     # bypass_bl = model.control_data.create_prism_control()
     # bypass_bl.set_surface_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES, zone_expression="bypass_inner_wall,core_outer_wall,bypass_pylon_wall"))
     # bypass_bl.set_volume_scope(volume_scope)
@@ -230,16 +223,26 @@ def main(args):
     with (prime.launch_prime(n_procs=args.processes, timeout=60) as prime_client):
 
         model = prime_client.model
-        print(f"default number of threads: {model.get_num_threads()}")
         model.set_num_threads(args.threads)
-        print(f"new number of threads: {model.get_num_threads()}")
+
+        print(f"launched with {args.processes} processes and {model.get_num_threads()} threads")
+
         if not args.no_display:
             import ansys.meshing.prime.graphics as graphics
             display = graphics.Graphics(model)
 
-        model.python_logger.setLevel(logging.DEBUG)
-        ch = logging.StreamHandler(stream=sys.stdout)
-        ch.setLevel(logging.DEBUG)
+        if args.verbose:
+            model.python_logger.setLevel(logging.INFO)
+            ch = logging.StreamHandler(stream=sys.stdout)
+            ch.setLevel(logging.INFO)
+        elif args.very_verbose:
+            model.python_logger.setLevel(logging.DEBUG)
+            ch = logging.StreamHandler(stream=sys.stdout)
+            ch.setLevel(logging.DEBUG)
+        else:
+            model.python_logger.setLevel(logging.WARNING)
+            ch = logging.StreamHandler(stream=sys.stderr)
+            ch.setLevel(logging.WARNING)
 
         # Create formatter for message output
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -299,6 +302,9 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--processes", type=int, default=8, help="number of processes to use for meshing")
     parser.add_argument("-t", "--threads", type=int, default=2, help="number of threads to use for meshing")
     parser.add_argument("--no-wake", action="store_true", help="do not mesh the wake")
+    parser.add_argument("-v", "--verbose", action="store_true", help="enable verbose output")
+    parser.add_argument("-vv", "--very-verbose", action="store_true", help="enable very verbose output")
+
     args = parser.parse_args()
 
     main(args)
