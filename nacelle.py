@@ -1,15 +1,16 @@
 import json
+
 import numpy as np
 from ansys.geometry.core.math.point import Point2D
 from flightcondition import FlightCondition, unit
 from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS
-from svgpathtools import Arc, CubicBezier, svg2paths
+from svgpathtools import Arc, svg2paths
 
-from jet import JetCondition, LEAP1A, PW1100G
-from setup import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats
 from geometry import fillet
 from hygrometry import psat_ice, psat_water
+from jet import JetCondition, PW1100G
+from setup import AdvancedJSONEncoder, BoundaryCondition, boundary_layer_mesh_stats
 
 M_h2o = 18.01528  # g/mol
 M_air = 28.9647  # g/mol
@@ -38,9 +39,8 @@ lines = {"nacelle": [],
 
 origin = paths[9][0].end
 scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude)
-for i,path in enumerate(paths):
+for i, path in enumerate(paths):
     paths[i] = path.translated(-origin).scaled(scale)
-
 
 paths[3] = paths[3].reversed()
 
@@ -51,8 +51,8 @@ Ab = abs(np.pi * L * (p1.imag + p2.imag)) * unit('m^2')
 Ac = abs(np.pi * (paths[4][0].start.imag ** 2 - paths[4][0].end.imag ** 2)) * unit('m^2')
 plt.plot([p1.real, p2.real], [-p1.imag, -p2.imag])
 
-f11,f12, wake1_i, wake1 = fillet(paths[0][-1], paths[1][-1], 0.006, 0.058, 0.6, 10)
-f21,f22, wake2_i, wake2 = fillet(paths[2][-1], paths[3][-1], 0.006, 0.033, 0.25, 10)
+f11, f12, wake1_i, wake1 = fillet(paths[0][-1], paths[1][-1], 0.006, 0.058, 0.6, 10)
+f21, f22, wake2_i, wake2 = fillet(paths[2][-1], paths[3][-1], 0.006, 0.033, 0.25, 10)
 paths[0].append(f11)
 paths[1].append(f12)
 paths[2].append(f21)
@@ -148,7 +148,6 @@ with open("geom/lines.txt", "w") as f:
 # plt.ylim(-1.5, 2.8)
 
 
-
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
 # print(condition)
 
@@ -156,12 +155,9 @@ condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), uni
 pv_w = psat_water(condition.p.magnitude, condition.T.magnitude) * unit('Pa')
 pv_i = psat_ice(condition.p.magnitude, condition.T.magnitude) * unit('Pa')
 
-p_h2o = (pv_w + pv_i) / 2  # between limits. can also be set to 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
+p_h2o = (
+                    pv_w + pv_i) / 2  # between limits. can also be set to 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
 Y_h2o = (M_h2o * p_h2o) / (M_h2o * p_h2o + M_air * (condition.p - p_h2o))
-
-
-
-
 
 jet = JetCondition(condition, engine, Af, Ab, Ac, Y_h2o)
 Ab_des = jet.Ab.to_base_units()
@@ -230,11 +226,9 @@ bc = BoundaryCondition(M=condition.M,
 with open("geom/boundary_conditions.json", "w", encoding='utf-8') as f:
     json.dump(bc, f, ensure_ascii=False, cls=AdvancedJSONEncoder, indent=4)
 
-
 for tedge in tedges:
     print(
         f"trailing edge thickness on {tedge} = {1000 * abs(lines[tedge][-2].y.magnitude - lines[tedge][-1].y.magnitude):.2f}mm")
-
 
 plt.gca().set_aspect('equal', adjustable='box')
 plt.show()

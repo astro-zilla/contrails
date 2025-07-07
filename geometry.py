@@ -1,5 +1,3 @@
-
-
 from svgpathtools import Arc, CubicBezier, Line, Path, QuadraticBezier
 
 
@@ -26,7 +24,6 @@ def cut_te(upper, lower, thickness):
         return 1
 
 
-
 def get_intersection(a1, b1, a2, b2):
     # a1 + b1 * t1 = a2 + b2 * t2
     # t1 = (a2 - a1) / (b1 - b2)
@@ -40,7 +37,7 @@ def get_intersection(a1, b1, a2, b2):
     return t1, t2
 
 
-def get_distances_to_normal_intersection(t1:float, t2:float, segment1:CubicBezier, segment2:CubicBezier):
+def get_distances_to_normal_intersection(t1: float, t2: float, segment1: CubicBezier, segment2: CubicBezier):
     # get points on the segments
     a1 = segment1.point(t1)
     a2 = segment2.point(t2)
@@ -53,9 +50,10 @@ def get_distances_to_normal_intersection(t1:float, t2:float, segment1:CubicBezie
         return None
 
     # calculate distances (signed such that the intersection lies between the lines)
-    d1 = abs(b1 * tt1) * -tt1/abs(tt1)
-    d2 = abs(b2 * tt2) * tt2/abs(tt2)
+    d1 = abs(b1 * tt1) * -tt1 / abs(tt1)
+    d2 = abs(b2 * tt2) * tt2 / abs(tt2)
     return d1, d2
+
 
 def plot(segment):
     import matplotlib.pyplot as plt
@@ -65,45 +63,41 @@ def plot(segment):
     plt.plot(pts.real, -pts.imag)
 
 
-
 def fillet(segment1: CubicBezier, segment2: CubicBezier, r, h, rwake, lwake):
-
     def f(t, segment1, segment2, r):
-        t1,t2=t
+        t1, t2 = t
         d1, d2 = get_distances_to_normal_intersection(t1, t2, segment1, segment2)
         return [d1 - r, d2 - r]
+
     import scipy
-    import matplotlib.pyplot as plt
     import numpy as np
-    t1, t2 = scipy.optimize.root(f, x0=np.array([0,0]), args=(segment1, segment2, r), method='lm').x
-    i1,i2 = get_intersection(segment1.point(t1), segment1.normal(t1), segment2.point(t2), segment2.normal(t2))
+    t1, t2 = scipy.optimize.root(f, x0=np.array([0, 0]), args=(segment1, segment2, r), method='lm').x
+    i1, i2 = get_intersection(segment1.point(t1), segment1.normal(t1), segment2.point(t2), segment2.normal(t2))
 
     intersection = segment1.point(t1) + segment1.normal(t1) * i1
 
-    segment1.start,segment1.control1,segment1.control2,segment1.end = segment1.cropped(0, t1).bpoints()
-    segment2.start,segment2.control1,segment2.control2,segment2.end = segment2.cropped(0, t2).bpoints()
+    segment1.start, segment1.control1, segment1.control2, segment1.end = segment1.cropped(0, t1).bpoints()
+    segment2.start, segment2.control1, segment2.control2, segment2.end = segment2.cropped(0, t2).bpoints()
 
     fillet = Arc(start=segment1.end, radius=complex(r, r), rotation=0, large_arc=False, sweep=True, end=segment2.end)
 
     # find initial gradient of wake
-    bwake = segment1.unit_tangent(1)+segment2.unit_tangent(1)
+    bwake = segment1.unit_tangent(1) + segment2.unit_tangent(1)
     bwake /= abs(bwake)
 
-    wake_initial = Line(intersection-bwake*(h+r), intersection+bwake*(h+r))
+    wake_initial = Line(intersection - bwake * (h + r), intersection + bwake * (h + r))
 
-    print(wake_initial,intersection,fillet)
-    (tf,tw), = fillet.intersect(wake_initial)
+    print(wake_initial, intersection, fillet)
+    (tf, tw), = fillet.intersect(wake_initial)
 
-    wake_initial = wake_initial.cropped(tw,1)
-    fillet1,fillet2 = fillet.split(tf)
+    wake_initial = wake_initial.cropped(tw, 1)
+    fillet1, fillet2 = fillet.split(tf)
 
-    tmp_initial = Line(intersection,intersection+2*bwake*(rwake/bwake.imag))
-    tmp_end = Line(complex(-lwake,-rwake),complex(lwake,-rwake))
+    tmp_initial = Line(intersection, intersection + 2 * bwake * (rwake / bwake.imag))
+    tmp_end = Line(complex(-lwake, -rwake), complex(lwake, -rwake))
 
-
-    (q1,q2), = tmp_initial.intersect(tmp_end)
-    wake_quad = QuadraticBezier(wake_initial.end,tmp_initial.point(q1),complex(2,-rwake))
+    (q1, q2), = tmp_initial.intersect(tmp_end)
+    wake_quad = QuadraticBezier(wake_initial.end, tmp_initial.point(q1), complex(2, -rwake))
     wake_end = Line(wake_quad.end, complex(lwake, -rwake))
 
-
-    return fillet1,fillet2.reversed(), Path(wake_initial), Path(wake_quad,wake_end)
+    return fillet1, fillet2.reversed(), Path(wake_initial), Path(wake_quad, wake_end)
