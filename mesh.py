@@ -96,7 +96,7 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True):
     wrapper = prime.Wrapper(model)
 
     # todo can;t get the material points correct for this but it's not required for simple meshes
-    # close_gaps_params = prime.WrapperCloseGapsParams(model,target=prime.ScopeDefinition(model),gap_size=6.0,create_new_part=False,material_point_name="nacelle")
+    # close_gaps_params = prime.WrapperCloseGapsParams(model,target=prime.ScopeDefinition(model),gap_size=6.0,create_new_part=False,material_point_name="nacelle-legacy")
     # create_material_points(model)
     # wrapper.close_gaps(prime.ScopeDefinition(model, label_expression="* !freestream"),close_gaps_params)
 
@@ -104,7 +104,7 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True):
     # improve_quality_params = prime.WrapperImproveQualityParams(model, resolve_intersections=True,
     #                                                            resolve_invalid_node_normals=True, resolve_spikes=True,
     #                                                            number_of_threads=32)
-    # wrapper.improve_quality(nacelle.id, improve_quality_params)
+    # wrapper.improve_quality(nacelle-legacy.id, improve_quality_params)
 
     # compute new volumes
     print(nacelle.compute_topo_volumes(
@@ -136,7 +136,7 @@ def setup_volume_controls(model, wakes: bool = True):
 
 
 def setup_bl_controls(model, wakes: bool = True):
-    with open("geom/nacelle.json", "r") as f:
+    with open("geom/nacelle-legacy.json", "r") as f:
         bcs = BoundaryCondition(**json.load(f))
     # add BLs
     volume_scope = prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.VOLUME)
@@ -203,7 +203,7 @@ def volume_mesh(model, prism_control_ids, volume_control_ids):
 
 
 def create_material_points(model: prime.Model, wakes: bool = True):
-    model.material_point_data.create_material_point("nacelle",
+    model.material_point_data.create_material_point("nacelle-legacy",
                                                     [-2000, 0, 0],
                                                     prime.CreateMaterialPointParams(model, prime.MaterialPointType.DEAD))
     model.material_point_data.create_material_point("freestream",
@@ -261,7 +261,7 @@ def main(args):
 
         prime.FileIO(model).write_pmdat(str(fname.with_suffix(".pmdat")), prime.FileWriteParams(model))
         print(f"saved {str(fname.with_suffix('.pmdat'))}")
-        # prime.FileIO(model).read_pmdat("geom/nacelle.pmdat", prime.FileReadParams(model))
+        # prime.FileIO(model).read_pmdat("geom/nacelle-legacy.pmdat", prime.FileReadParams(model))
 
         volume_control_ids = setup_volume_controls(model, not args.no_wake)
         prism_control_ids = setup_bl_controls(model, not args.no_wake)

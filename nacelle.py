@@ -21,7 +21,7 @@ engine = PW1100G
 paths, attributes = svg2paths("images/exhaust_traced.svg")
 # order of this dict matters as it reflects the numbering of lines in the svg.
 # dict ordering is standard in modern python and in svg, but not guaranteed in early python so not pythonic?
-lines = {"nacelle": [],
+lines = {"nacelle-legacy": [],
          "bypass_tail_outer": [],
          "bypass_tail_inner": [],
          "core_tail_outer": [],
@@ -106,11 +106,11 @@ tedges = []
 lines["nosecone"][0].x = lines["fan_iface"][-1].x
 lines["fan_iface"][-1] = lines["nosecone"][0]
 
-lines["nacelle"][0].x = lines["fan_iface"][0].x
-lines["fan_iface"][0] = lines["nacelle"][0]
+lines["nacelle-legacy"][0].x = lines["fan_iface"][0].x
+lines["fan_iface"][0] = lines["nacelle-legacy"][0]
 # te
-# tedges.append(["nacelle", "bypass_tail_outer"][cut_te(lines["nacelle"], lines["bypass_tail_outer"],te_thickness)])
-# lines["nacelle"][-1] = lines["bypass_tail_outer"][-1]
+# tedges.append(["nacelle-legacy", "bypass_tail_outer"][cut_te(lines["nacelle-legacy"], lines["bypass_tail_outer"],te_thickness)])
+# lines["nacelle-legacy"][-1] = lines["bypass_tail_outer"][-1]
 lines["bypass_tail_outer"][0].x = lines["bypass_iface"][0].x
 lines["bypass_iface"][0] = lines["bypass_tail_outer"][0]
 
