@@ -89,7 +89,7 @@ def boundary_layer_mesh_stats(rho, V, mu, L, x, yplus, GR):
     # Reynolds number for calculating final boundary layer height at TE
     Re_x = rho * V * x / mu
     delta_x = (0.37 * x * Re_x ** (-1 / 5))
-    n = np.log(1 + (delta_x / y0) * (GR - 1)) / np.log(GR)
+    n = np.log(1 + (delta_x / y0) * (GR - 1)) / np.log(GR) if GR > 1 else delta_x/y0
 
     final_layer_height = y0 * GR ** (n - 1)
 

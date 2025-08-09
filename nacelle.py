@@ -51,8 +51,8 @@ Ab = abs(np.pi * L * (p1.imag + p2.imag)) * unit('m^2')
 Ac = abs(np.pi * (paths[4][0].start.imag ** 2 - paths[4][0].end.imag ** 2)) * unit('m^2')
 plt.plot([p1.real, p2.real], [-p1.imag, -p2.imag])
 
-f11, f12, wake1_i, wake1 = fillet(paths[0][-1], paths[1][-1], 0.006, 0.058, 0.6, 10)
-f21, f22, wake2_i, wake2 = fillet(paths[2][-1], paths[3][-1], 0.006, 0.033, 0.25, 10)
+f11, f12, wake1_i, wake1 = fillet(paths[0][-1], paths[1][-1], 0.006, 0.135, 0.6, 10)
+f21, f22, wake2_i, wake2 = fillet(paths[2][-1], paths[3][-1], 0.006, 0.135, 0.25, 10)
 paths[0].append(f11)
 paths[1].append(f12)
 paths[2].append(f21)
@@ -183,8 +183,8 @@ BL3 = boundary_layer_mesh_stats(rho=jet.station_5_0.rho_mass() * unit('kg/m^3'),
 print('\nWAKE')
 BL4 = boundary_layer_mesh_stats(rho=jet.station_19_0.rho_mass() * unit('kg/m^3'), V=0.5 * (jet.Vjc - jet.Vjb) * unit('m/s'),
                                 mu=jet.station_19_0.mu() * unit('Pa.s').to_base_units(),
-                                L=0.6 * unit('m'), x=5.291 * unit('m'),
-                                yplus=30.0, GR=1.2)
+                                L=0.4 * unit('m'), x=20 * unit('m'),
+                                yplus=500.0, GR=1)
 
 I_bypass = 0.05  # Russo, F. and Basse, N.T. (2016)
 I_core = 0.10  # https://www.cfd-online.com/Wiki/Turbulence_intensity
