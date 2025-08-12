@@ -40,6 +40,8 @@ class BoundaryCondition:
     p: float
     p0: float
     nu: float
+    k: float
+    w: float
     Y_h2o: float
     vx: float
 
@@ -49,10 +51,14 @@ class BoundaryCondition:
 
     h0_bypass: float
     nu_bypass: float
+    k_bypass: float
+    w_bypass: float
     A_bypass: float
 
     h0_core: float
     nu_core: float
+    k_core: float
+    w_core: float
     A_core: float
     Y_h2o_core: float
 
@@ -89,7 +95,7 @@ def boundary_layer_mesh_stats(rho, V, mu, L, x, yplus, GR):
     # Reynolds number for calculating final boundary layer height at TE
     Re_x = rho * V * x / mu
     delta_x = (0.37 * x * Re_x ** (-1 / 5))
-    n = np.log(1 + (delta_x / y0) * (GR - 1)) / np.log(GR)
+    n = np.log(1 + (delta_x / y0) * (GR - 1)) / np.log(GR) if GR > 1 else delta_x/y0
 
     final_layer_height = y0 * GR ** (n - 1)
 
