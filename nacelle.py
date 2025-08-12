@@ -149,14 +149,13 @@ with open("geom/lines.txt", "w") as f:
 
 
 condition = FlightCondition(M=0.78, L=3.8 * unit('m'), h=37000 * unit('ft'), units='SI')
-# print(condition)
-
+print(condition)
 
 pv_w = psat_water(condition.p.magnitude, condition.T.magnitude) * unit('Pa')
 pv_i = psat_ice(condition.p.magnitude, condition.T.magnitude) * unit('Pa')
 
 p_h2o = (
-                    pv_w + pv_i) / 2  # between limits. can also be set to 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
+                pv_w + pv_i) / 2  # between limits. can also be set to 120% humidity [Petzold, A. et al.](https://doi.org/10.5194/acp-20-8157-2020)
 Y_h2o = (M_h2o * p_h2o) / (M_h2o * p_h2o + M_air * (condition.p - p_h2o))
 
 jet = JetCondition(condition, engine, Af, Ab, Ac, Y_h2o)
@@ -186,15 +185,26 @@ BL4 = boundary_layer_mesh_stats(rho=jet.station_19_0.rho_mass() * unit('kg/m^3')
                                 L=0.4 * unit('m'), x=20 * unit('m'),
                                 yplus=500.0, GR=1)
 
+C_mu = 0.09  # https://doi.org/10.1016/j.jcp.2004.08.009
+
 I_bypass = 0.05  # Russo, F. and Basse, N.T. (2016)
 I_core = 0.10  # https://www.cfd-online.com/Wiki/Turbulence_intensity
 
-nu_bypass = np.sqrt(3 / 2) * condition.TAS * I_bypass * 0.05 * np.pi * 2 * abs(
+l_bypass = 0.05 * np.pi * 2 * abs(
     (lines["bypass_iface"][0].y.magnitude + lines["bypass_iface"][-1].y.magnitude) / 2) * unit(
     'm') / 20  # https://www.cfd-online.com/Wiki/Turbulent_length_scale
-nu_core = np.sqrt(3 / 2) * condition.TAS * I_core * 0.05 * np.pi * 2 * abs(
+l_core = 0.05 * np.pi * 2 * abs(
     (lines["core_iface"][0].y.magnitude + lines["core_iface"][-1].y.magnitude) / 2) * unit(
     'm') / 400  # https://www.cfd-online.com/Wiki/Turbulent_length_scale
+
+nu_bypass = np.sqrt(3 / 2) * condition.TAS * I_bypass * l_bypass
+nu_core = np.sqrt(3 / 2) * condition.TAS * I_core * l_core
+
+k_bypass = 3 / 2 * (condition.TAS * I_bypass) ** 2
+k_core = 3 / 2 * (condition.TAS * I_core) ** 2
+
+w_bypass = C_mu ** 0.75 * k_bypass ** 0.5 / l_bypass
+w_core = C_mu ** 0.75 * k_core ** 0.5 / l_core
 
 print(nu_bypass, nu_core, condition.mu / condition.rho)
 
@@ -205,6 +215,8 @@ bc = BoundaryCondition(M=condition.M,
                        p=condition.p,
                        p0=condition.p0,
                        nu=condition.nu,
+                       k=5*condition.TAS.magnitude/condition.L.magnitude,
+                       w=10e-6*condition.TAS.magnitude**2,
                        Y_h2o=Y_h2o,
                        vx=condition.TAS,
                        mdot=jet.mdot,
@@ -212,9 +224,13 @@ bc = BoundaryCondition(M=condition.M,
                        Fnet=jet.Fnet,
                        h0_bypass=jet.station_19_0.H_mass() + jet.h_ref.magnitude,
                        nu_bypass=nu_bypass,
+                       k_bypass=k_bypass,
+                       w_bypass=w_bypass,
                        A_bypass=Ab,
                        h0_core=jet.station_5_0.H_mass() + jet.h_ref.magnitude,
                        nu_core=nu_core,
+                       k_core=k_core,
+                       w_core=w_core,
                        A_core=Ac,
                        Y_h2o_core=jet.zs_exhaust[0],
                        p_fan=jet.p2,

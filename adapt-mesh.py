@@ -49,7 +49,7 @@ pos = np.float64(pos)*scale/2**29+origin
 plotter = pv.Plotter()
 plotter.add_points(pos.reshape((-1,3)),
         scalars=gridsize.reshape((-1)),show_scalar_bar=True,
-        cmap='jet_r',log_scale=True,opacity=0.8
+        cmap='jet_r',log_scale=False,opacity=0.8
         )
 plotter.show_bounds(bounds=(-6000,1000,-2000,2000,-2000,2000))
 plotter.show_axes()
