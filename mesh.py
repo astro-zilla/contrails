@@ -50,16 +50,17 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
 
     # wake size control
     if wakes:
-        wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
-        wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
-        wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                          label_expression="wake_*er_internal"))
-        print(f"created wake size control {wake_size_control.id}")
+        # wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
+        # wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
+        # wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+        #                                                   label_expression="wake_*er_internal"))
+        # print(f"created wake size control {wake_size_control.id}")
 
         wake_boi_control = model.control_data.create_size_control(prime.SizingType.BOI)
         wake_boi_control.set_boi_sizing_params(prime.BoiSizingParams(model,max=18.7,growth_rate=1.2))
-        wake_boi_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                          label_expression="wake_*er_internal"))
+        wake_boi_control.set_scope(prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEANDEDGEZONELETS,
+                                                         evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                        label_expression="*internal"))
         print(f"created wake BOI control {wake_boi_control.id}")
 
     if periodic:
@@ -101,13 +102,13 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     size_field = prime.SizeField(model)
     size_field.compute_volumetric(
         [control.id for control in model.control_data.size_controls],
-        prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True
-                                               , enable_periodicity=False,
-                                               periodic_params=prime.SFPeriodicParams(model, axis=[1, 0, 0], angle=30,
-                                                                                      center=[0, 0, 0])))
+        prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True))
     print(f"computed size field {size_field}")
     prime.FileIO(model).write_size_field(str(fname.with_suffix('.psf')), prime.WriteSizeFieldParams(model, False))
     print(f"exported size field {str(fname.with_suffix('.psf'))} at {time.time() - t0:.2f} seconds")
+
+
+
 
     surfer = prime.Surfer(model)
 
@@ -125,14 +126,14 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     print(surfer.mesh_topo_faces(nacelle.id, wall_faces, wall_params))
     print(f"meshed {len(wall_faces)} wall faces: {wall_faces}")
 
-    if wakes:
+    if wakes and 1==2:
         # mesh wake faces
         wake_params = prime.SurferParams(model=model, generate_quads=True,
                                          size_field_type=prime.SizeFieldType.VOLUMETRIC,
                                          enable_multi_threading=True)
-    wake_faces = nacelle.get_topo_faces_of_label_name_pattern("*wake*", prime.NamePatternParams(model))
-    print(surfer.mesh_topo_faces(nacelle.id, wake_faces, wake_params))
-    print(f"meshed {len(wake_faces)} wake faces: {wake_faces}")
+        wake_faces = nacelle.get_topo_faces_of_label_name_pattern("*internal", prime.NamePatternParams(model))
+        print(surfer.mesh_topo_faces(nacelle.id, wake_faces, wake_params))
+        print(f"meshed {len(wake_faces)} wake faces: {wake_faces}")
 
     # mesh periodics
     if periodic:
@@ -146,12 +147,15 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     print(f"completed surface meshing at {time.time() - t0:.2f} seconds")
 
     prime.lucid.Mesh(model).create_zones_from_labels("*")
+    nacelle.delete_topo_entities(prime.DeleteTopoEntitiesParams(model, delete_geom_zonelets=True))
+
     # compute new volumes
 
-    print(nacelle.compute_topo_volumes(
+    print(nacelle.compute_closed_volumes(
         prime.ComputeVolumesParams(model,
                                    prime.VolumeNamingType.BYFACELABEL,
                                    prime.CreateVolumeZonesType.PERNAMESOURCE, priority_ordered_names=["freestream"])))
+
     print(nacelle)
 
 
@@ -167,7 +171,7 @@ def setup_volume_controls(model, wakes: bool, periodic: bool):
         dead_control.set_scope(
             prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES, zone_expression=f"nacelle_wall*"))
         dead_control.set_params(prime.VolumeControlParams(model, prime.CellZoneletType.DEAD))
-        if wakes:
+        if wakes and 1==2:
             wake_control = model.control_data.create_volume_control()
             wake_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES,
                                                          zone_expression=f"wake_outer_internal*,wake_inner_internal*"))
