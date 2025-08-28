@@ -39,6 +39,10 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     print(f"importing {fname.absolute()} at {time.time() - t0:.2f} seconds")
     io.import_cad(str(fname.absolute()), params=import_params)
 
+    # import ansys.meshing.prime.graphics as graphics
+    # display = graphics.Graphics(model)
+    # display(model.parts, update=True, scope=prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEZONELETS))
+    # exit(0)
     nacelle = model.parts[0]
     print(nacelle.get_topo_faces_of_label_name_pattern("freestream", prime.NamePatternParams(model)))
     print(nacelle)
@@ -70,6 +74,12 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
                                                          label_expression="*periodic*"))
         print(f"created periodic control {periodic_control.id}")
         print(periodic_control.get_summary(prime.PeriodicControlSummaryParams(model)).message)
+
+    iface_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
+    iface_size_control.set_hard_sizing_params(prime.HardSizingParams(model,min=25.0))
+    iface_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                       label_expression="*iface"))
+    print(f"created iface size control {iface_size_control.id}")
 
     # curvature size controls
     walls_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
@@ -113,15 +123,15 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     surfer = prime.Surfer(model)
 
     # mesh ifaces
-    iface_params = prime.SurferParams(model=model, constant_size=25.0, enable_multi_threading=True)
-    iface_faces = nacelle.get_topo_faces_of_label_name_pattern("*_iface", prime.NamePatternParams(model))
-    print(surfer.mesh_topo_faces(nacelle.id, iface_faces, iface_params))
-    print(f"meshed {len(iface_faces)} iface faces: {iface_faces}")
+    # iface_params = prime.SurferParams(model=model, constant_size=25.0, enable_multi_threading=True)
+    # iface_faces = nacelle.get_topo_faces_of_label_name_pattern("*_iface", prime.NamePatternParams(model))
+    # print(surfer.mesh_topo_faces(nacelle.id, iface_faces, iface_params))
+    # print(f"meshed {len(iface_faces)} iface faces: {iface_faces}")
 
     # mesh walls
     wall_params = prime.SurferParams(model=model, generate_quads=False, size_field_type=prime.SizeFieldType.VOLUMETRIC,
                                      enable_multi_threading=True)
-    wall_faces = nacelle.get_topo_faces_of_label_name_pattern(f"*_wall,freestream{',zero_rad' if periodic else ''}",
+    wall_faces = nacelle.get_topo_faces_of_label_name_pattern(f"*_wall,*_iface,freestream{',zero_rad' if periodic else ''}",
                                                               prime.NamePatternParams(model))
     print(surfer.mesh_topo_faces(nacelle.id, wall_faces, wall_params))
     print(f"meshed {len(wall_faces)} wall faces: {wall_faces}")
@@ -268,6 +278,7 @@ def main(args):
         if not args.no_display:
             import ansys.meshing.prime.graphics as graphics
             display = graphics.Graphics(model)
+
 
         if args.verbose:
             model.python_logger.setLevel(logging.INFO)

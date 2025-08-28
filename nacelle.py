@@ -171,7 +171,7 @@ BL4 = boundary_layer_mesh_stats(rho=jet.station_19_0.rho_mass() * unit('kg/m^3')
 C_mu = 0.09  # https://doi.org/10.1016/j.jcp.2004.08.009
 
 I_bypass = 0.05  # Russo, F. and Basse, N.T. (2016)
-I_core = 0.10  # https://www.cfd-online.com/Wiki/Turbulence_intensity
+I_core = 0.05  # https://www.cfd-online.com/Wiki/Turbulence_intensity
 
 l_bypass = 0.05 * np.pi * 2 * abs(
     (lines["bypass_iface"][0].y.magnitude + lines["bypass_iface"][-1].y.magnitude) / 2) * unit(

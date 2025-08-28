@@ -187,6 +187,7 @@ class JetCondition:
 
         Vjb = np.sqrt(2 * self.cP_a * (station_03b.T - station_3b.T)).magnitude
         Vjc = Vjb / self.engine.Vjb_Vjc
+        # todo vf
 
         # specific thrusts
         tb = (Vjb - fc.TAS.magnitude + (station_3b.P - fc.p.magnitude) / (station_3b.rho_mass() * Vjb)) * unit('m/s')
