@@ -9,6 +9,7 @@ import ansys.meshing.prime as prime
 import ansys.fluent.core as pyfluent
 import numpy as np
 
+from ansys_formats import PrimeSizeField
 from setup import BoundaryCondition
 
 t0 = time.time()
@@ -24,7 +25,7 @@ def delete_topology(model: prime.Model):
             )
 
 
-def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: bool = False):
+def surface_mesh(model: prime.Model, fname: Path, fname_sf:str = None, wakes: bool = True, periodic: bool = False):
     # start prime meshing
     io = prime.FileIO(model)
 
@@ -52,70 +53,74 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     # global size control
     model.set_global_sizing_params(prime.GlobalSizingParams(model, min=3.0, max=80000, growth_rate=1.2))
 
-    # wake size control
-    if wakes:
-        # wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
-        # wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
-        # wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-        #                                                   label_expression="wake_*er_internal"))
-        # print(f"created wake size control {wake_size_control.id}")
+    if fname_sf is None:
+        # wake size control
+        if wakes:
+            # wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
+            # wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
+            # wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+            #                                                   label_expression="wake_*er_internal"))
+            # print(f"created wake size control {wake_size_control.id}")
 
-        wake_boi_control = model.control_data.create_size_control(prime.SizingType.BOI)
-        wake_boi_control.set_boi_sizing_params(prime.BoiSizingParams(model,max=18.7,growth_rate=1.2))
-        wake_boi_control.set_scope(prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEANDEDGEZONELETS,
-                                                         evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                        label_expression="*internal"))
-        print(f"created wake BOI control {wake_boi_control.id}")
+            wake_boi_control = model.control_data.create_size_control(prime.SizingType.BOI)
+            wake_boi_control.set_boi_sizing_params(prime.BoiSizingParams(model,max=18.7,growth_rate=1.2))
+            wake_boi_control.set_scope(prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEANDEDGEZONELETS,
+                                                             evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                            label_expression="*internal"))
+            print(f"created wake BOI control {wake_boi_control.id}")
 
-    if periodic:
-        periodic_control = model.control_data.create_periodic_control()
-        periodic_control.set_params(prime.PeriodicControlParams(model, center=[0, 0, 0], axis=[1, 0, 0], angle=30.0))
-        periodic_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                         label_expression="*periodic*"))
-        print(f"created periodic control {periodic_control.id}")
-        print(periodic_control.get_summary(prime.PeriodicControlSummaryParams(model)).message)
+        if periodic:
+            periodic_control = model.control_data.create_periodic_control()
+            periodic_control.set_params(prime.PeriodicControlParams(model, center=[0, 0, 0], axis=[1, 0, 0], angle=30.0))
+            periodic_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                             label_expression="*periodic*"))
+            print(f"created periodic control {periodic_control.id}")
+            print(periodic_control.get_summary(prime.PeriodicControlSummaryParams(model)).message)
 
-    iface_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
-    iface_size_control.set_hard_sizing_params(prime.HardSizingParams(model,min=25.0))
-    iface_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                       label_expression="*iface"))
-    print(f"created iface size control {iface_size_control.id}")
+        iface_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
+        iface_size_control.set_hard_sizing_params(prime.HardSizingParams(model,min=25.0))
+        iface_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                           label_expression="*iface"))
+        print(f"created iface size control {iface_size_control.id}")
 
-    # curvature size controls
-    walls_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
-    walls_size_control.set_curvature_sizing_params(
-        prime.CurvatureSizingParams(model, min=3.0, max=220.0, normal_angle=4.0, use_cad_curvature=True))
-    walls_size_control.set_scope(
-        prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                              label_expression=f"*_wall,zero_rad"))
-    print(f"created wall size control {walls_size_control.id}")
-    freestream_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
-    freestream_size_control.set_curvature_sizing_params(
-        prime.CurvatureSizingParams(model, min=25120, max=80000, normal_angle=18.0, use_cad_curvature=True))
-    freestream_size_control.set_scope(
-        prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="freestream"))
-    print(f"created freestream size control {freestream_size_control.id}")
+        # curvature size controls
+        walls_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
+        walls_size_control.set_curvature_sizing_params(
+            prime.CurvatureSizingParams(model, min=3.0, max=220.0, normal_angle=4.0, use_cad_curvature=True))
+        walls_size_control.set_scope(
+            prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                  label_expression=f"*_wall,zero_rad"))
+        print(f"created wall size control {walls_size_control.id}")
+        freestream_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
+        freestream_size_control.set_curvature_sizing_params(
+            prime.CurvatureSizingParams(model, min=25120, max=80000, normal_angle=18.0, use_cad_curvature=True))
+        freestream_size_control.set_scope(
+            prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="freestream"))
+        print(f"created freestream size control {freestream_size_control.id}")
 
-    # proximity size control
-    proximity_size_control = model.control_data.create_size_control(prime.SizingType.PROXIMITY)
-    proximity_size_control.set_proximity_sizing_params(
-        prime.ProximitySizingParams(model, min=3.0, max=80000, growth_rate=1.2,
-                                    elements_per_gap=4, ignore_orientation=True,
-                                    ignore_self_proximity=False))
-    label_expr = f"*_wall,*_iface{',wake_*er_internal' if wakes else ''}"
-    proximity_size_control.set_scope(
-        prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression=label_expr)
-    )
-    print(f"created proximity size control {proximity_size_control.id}")
+        # proximity size control
+        proximity_size_control = model.control_data.create_size_control(prime.SizingType.PROXIMITY)
+        proximity_size_control.set_proximity_sizing_params(
+            prime.ProximitySizingParams(model, min=3.0, max=80000, growth_rate=1.2,
+                                        elements_per_gap=4, ignore_orientation=True,
+                                        ignore_self_proximity=False))
+        label_expr = f"*_wall,*_iface{',wake_*er_internal' if wakes else ''}"
+        proximity_size_control.set_scope(
+            prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression=label_expr)
+        )
+        print(f"created proximity size control {proximity_size_control.id}")
 
-    # compute size field
-    size_field = prime.SizeField(model)
-    size_field.compute_volumetric(
-        [control.id for control in model.control_data.size_controls],
-        prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True))
-    print(f"computed size field {size_field}")
-    prime.FileIO(model).write_size_field(str(fname.with_suffix('.psf')), prime.WriteSizeFieldParams(model, False))
-    print(f"exported size field {str(fname.with_suffix('.psf'))} at {time.time() - t0:.2f} seconds")
+        # compute size field
+        size_field = prime.SizeField(model)
+        size_field.compute_volumetric(
+            [control.id for control in model.control_data.size_controls],
+            prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True))
+        print(f"computed size field {size_field}")
+        prime.FileIO(model).write_size_field(str(fname.with_suffix('.psf')), prime.WriteSizeFieldParams(model, False))
+        print(f"exported size field {str(fname.with_suffix('.psf'))} at {time.time() - t0:.2f} seconds")
+    else:
+        prime.FileIO(model).read_size_field(fname_sf, prime.ReadSizeFieldParams(model, False))
+        print(f"imported size field {fname_sf} at {time.time() - t0:.2f} seconds")
 
 
 
@@ -302,7 +307,7 @@ def main(args):
 
         # begin meshing
         create_material_points(model, False)
-        surface_mesh(model, fname, not args.no_wake, "periodic" in fname.name)
+        surface_mesh(model, fname, fname_sf=args.size_field, wakes=not args.no_wake, periodic="periodic" in fname.name)
         # check surface mesh quality before proceeding to volume meshing
         summary = model.parts[0].get_summary(prime.PartSummaryParams(model))
         print("Part summary:", summary)
@@ -351,6 +356,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Generate a surface mesh for a geometry using Ansys Meshing Prime.")
     parser.add_argument("fname", help="path to .scdoc file")
+    parser.add_argument("--size-field", "-sf", help="path to .psf size field file to use")
     parser.add_argument("--no-display", action="store_true", help="do not display the mesh in a window")
     parser.add_argument("-p", "--processes", type=int, default=8, help="number of processes to use for meshing")
     parser.add_argument("-t", "--threads", type=int, default=2, help="number of threads to use for meshing")
