@@ -341,4 +341,6 @@ class JetCondition:
           F = {self.Fnet},{(mdotb*self.Vjb+mdotc*self.Vjc-(mdotb+mdotc)*V2.magnitude+self.Ab.magnitude*self.station_19.P-self.Af.magnitude*self.p2)/1000}
         """)
 
+        # 275 and 400
+
 # give bypass ratio and fan area in filename so paraview script can run jet with correct params

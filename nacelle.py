@@ -39,7 +39,7 @@ lines = {"nacelle": [],
          "wake2": []}
 
 origin = paths[9][0].end
-scale = abs((engine.D / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude)
+scale = abs((engine.L / 2 / (paths[7][0].start.imag - paths[6][0].start.imag)).magnitude)
 for i, path in enumerate(paths):
     paths[i] = path.translated(-origin).scaled(scale)
 
