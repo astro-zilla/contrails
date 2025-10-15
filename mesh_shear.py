@@ -31,7 +31,7 @@ with (prime.launch_prime(n_procs=16, timeout=60) as prime_client):
     print("Part summary:", summary)
 
     # global size control
-    model.set_global_sizing_params(prime.GlobalSizingParams(model, min=10.0, max=500, growth_rate=1.02))
+    model.set_global_sizing_params(prime.GlobalSizingParams(model, min=10.0, max=500, growth_rate=1.01))
 
     # periodic_control = model.control_data.create_periodic_control()
     # periodic_control.set_params(prime.PeriodicControlParams(model))
