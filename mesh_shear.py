@@ -31,7 +31,7 @@ with (prime.launch_prime(n_procs=16, timeout=60) as prime_client):
     print("Part summary:", summary)
 
     # global size control
-    model.set_global_sizing_params(prime.GlobalSizingParams(model, min=10.0, max=500, growth_rate=1.01))
+    model.set_global_sizing_params(prime.GlobalSizingParams(model, min=10.0, max=500, growth_rate=1.1))
 
     # periodic_control = model.control_data.create_periodic_control()
     # periodic_control.set_params(prime.PeriodicControlParams(model))
@@ -44,7 +44,7 @@ with (prime.launch_prime(n_procs=16, timeout=60) as prime_client):
     splitter_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
                                                      label_expression="splitter*"))
     splitter_control.set_curvature_sizing_params(
-        prime.CurvatureSizingParams(model, min=10.0, max=200, growth_rate=1.01, normal_angle=4, use_cad_curvature=True))
+        prime.CurvatureSizingParams(model, min=10.0, max=200, growth_rate=1.1, normal_angle=4, use_cad_curvature=True))
     print(f"created splitter size control {splitter_control.id} at {time.time() - t0:.2f} seconds")
 
     # wake_control = model.control_data.create_size_control(prime.SizingType.SOFT)
