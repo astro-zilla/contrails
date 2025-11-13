@@ -67,6 +67,14 @@ def calculate_Qc1(fname: Path):
     grid.save(fname)
     del grid, domain0
 
+def calculate_Qc2(fname: Path):
+    grid = pv.read(fname)
+    domain0: UnstructuredGrid = grid.get_block(0).get_block(0)
+
+fname = Path("geom/slice_unsteady.vtkhdf")
+calculate_Qc2(fname)
+exit(0)
+
 fname = Path("geom/nacelle-2m.vtkhdf")
 calculate_Qc1(fname)
 

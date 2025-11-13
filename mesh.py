@@ -85,17 +85,10 @@ def surface_mesh(model: prime.Model, fname: Path, fname_sf:str = None, wakes: bo
     if fname_sf is None:
         # wake size control
         if wakes:
-            # wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
-            # wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
-            # wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-            #                                                   label_expression="wake_*er_internal"))
-            # print(f"created wake size control {wake_size_control.id}")
-
             wake_boi_control = model.control_data.create_size_control(prime.SizingType.BOI)
             wake_boi_control.set_boi_sizing_params(prime.BoiSizingParams(model, max=18.7, growth_rate=1.2))
-            wake_boi_control.set_scope(prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEANDEDGEZONELETS,
-                                                             evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                             label_expression="*internal"))
+            wake_boi_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                             label_expression="wake_internal"))
             print(f"created wake BOI control {wake_boi_control.id}")
 
         # proximity size control
@@ -104,18 +97,18 @@ def surface_mesh(model: prime.Model, fname: Path, fname_sf:str = None, wakes: bo
             prime.ProximitySizingParams(model, min=3.0, max=80000, growth_rate=1.2,
                                         elements_per_gap=4, ignore_orientation=True,
                                         ignore_self_proximity=False))
-        label_expr = f"*_wall,*_iface{',wake_*er_internal' if wakes else ''}"
+        label_expr = f"*_wall,*_iface"
         proximity_size_control.set_scope(
             prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression=label_expr)
         )
-        print(f"created proximity size control {proximity_size_control}")
+        print(f"created proximity size control {proximity_size_control.id}")
 
     # compute size field
-    # size_field = prime.SizeField(model)
-    # res=size_field.compute_volumetric(
-    #     [control.id for control in model.control_data.size_controls],
-    #     prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True))
-    # print(f"computed size field:\n{res}")
+    size_field = prime.SizeField(model)
+    res=size_field.compute_volumetric(
+        [control.id for control in model.control_data.size_controls],
+        prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True))
+    print(f"computed size field:\n{res}")
 
     if fname_sf is not None:
         fname_sf_surf = str(fname.with_stem(fname.stem+'-surf').with_suffix('.psf'))
