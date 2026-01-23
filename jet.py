@@ -187,6 +187,7 @@ class JetCondition:
 
         Vjb = np.sqrt(2 * self.cP_a * (station_03b.T - station_3b.T)).magnitude
         Vjc = Vjb / self.engine.Vjb_Vjc
+        # todo vf
 
         # specific thrusts
         tb = (Vjb - fc.TAS.magnitude + (station_3b.P - fc.p.magnitude) / (station_3b.rho_mass() * Vjb)) * unit('m/s')
@@ -339,5 +340,7 @@ class JetCondition:
           mdot = {mdotc} + {mdotb} = {(mdotb + mdotc)}
           F = {self.Fnet},{(mdotb*self.Vjb+mdotc*self.Vjc-(mdotb+mdotc)*V2.magnitude+self.Ab.magnitude*self.station_19.P-self.Af.magnitude*self.p2)/1000}
         """)
+
+        # 275 and 400
 
 # give bypass ratio and fan area in filename so paraview script can run jet with correct params

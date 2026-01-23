@@ -9,6 +9,7 @@ import ansys.meshing.prime as prime
 import ansys.fluent.core as pyfluent
 import numpy as np
 
+from ansys_formats import PrimeSizeField
 from setup import BoundaryCondition
 
 t0 = time.time()
@@ -24,7 +25,7 @@ def delete_topology(model: prime.Model):
             )
 
 
-def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: bool = False):
+def surface_mesh(model: prime.Model, fname: Path, fname_sf:str = None, wakes: bool = True, periodic: bool = False):
     # start prime meshing
     io = prime.FileIO(model)
 
@@ -39,6 +40,10 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     print(f"importing {fname.absolute()} at {time.time() - t0:.2f} seconds")
     io.import_cad(str(fname.absolute()), params=import_params)
 
+    # import ansys.meshing.prime.graphics as graphics
+    # display = graphics.Graphics(model)
+    # display(model.parts, update=True, scope=prime.ScopeDefinition(model, entity_type=prime.ScopeEntity.FACEZONELETS))
+    # exit(0)
     nacelle = model.parts[0]
     print(nacelle.get_topo_faces_of_label_name_pattern("freestream", prime.NamePatternParams(model)))
     print(nacelle)
@@ -48,20 +53,6 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     # global size control
     model.set_global_sizing_params(prime.GlobalSizingParams(model, min=3.0, max=80000, growth_rate=1.2))
 
-    # wake size control
-    if wakes:
-        wake_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
-        wake_size_control.set_hard_sizing_params(prime.HardSizingParams(model, min=18.7))
-        wake_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                          label_expression="wake_*er_internal"))
-        print(f"created wake size control {wake_size_control.id}")
-
-        wake_boi_control = model.control_data.create_size_control(prime.SizingType.BOI)
-        wake_boi_control.set_boi_sizing_params(prime.BoiSizingParams(model,max=18.7,growth_rate=1.2))
-        wake_boi_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
-                                                          label_expression="wake_*er_internal"))
-        print(f"created wake BOI control {wake_boi_control.id}")
-
     if periodic:
         periodic_control = model.control_data.create_periodic_control()
         periodic_control.set_params(prime.PeriodicControlParams(model, center=[0, 0, 0], axis=[1, 0, 0], angle=30.0))
@@ -69,6 +60,12 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
                                                          label_expression="*periodic*"))
         print(f"created periodic control {periodic_control.id}")
         print(periodic_control.get_summary(prime.PeriodicControlSummaryParams(model)).message)
+
+    iface_size_control = model.control_data.create_size_control(prime.SizingType.HARD)
+    iface_size_control.set_hard_sizing_params(prime.HardSizingParams(model,min=25.0))
+    iface_size_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                       label_expression="*iface"))
+    print(f"created iface size control {iface_size_control.id}")
 
     # curvature size controls
     walls_size_control = model.control_data.create_size_control(prime.SizingType.CURVATURE)
@@ -85,54 +82,78 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
         prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression="freestream"))
     print(f"created freestream size control {freestream_size_control.id}")
 
-    # proximity size control
-    proximity_size_control = model.control_data.create_size_control(prime.SizingType.PROXIMITY)
-    proximity_size_control.set_proximity_sizing_params(
-        prime.ProximitySizingParams(model, min=3.0, max=80000, growth_rate=1.2,
-                                    elements_per_gap=4, ignore_orientation=True,
-                                    ignore_self_proximity=False))
-    label_expr = f"*_wall,*_iface{',wake_*er_internal' if wakes else ''}"
-    proximity_size_control.set_scope(
-        prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression=label_expr)
-    )
-    print(f"created proximity size control {proximity_size_control.id}")
+    if fname_sf is None:
+        # wake size control
+        if wakes:
+            wake_boi_control = model.control_data.create_size_control(prime.SizingType.BOI)
+            wake_boi_control.set_boi_sizing_params(prime.BoiSizingParams(model, max=18.7, growth_rate=1.2))
+            wake_boi_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS,
+                                                             label_expression="wake_internal"))
+            print(f"created wake BOI control {wake_boi_control.id}")
+
+        # proximity size control
+        proximity_size_control = model.control_data.create_size_control(prime.SizingType.PROXIMITY)
+        proximity_size_control.set_proximity_sizing_params(
+            prime.ProximitySizingParams(model, min=3.0, max=80000, growth_rate=1.2,
+                                        elements_per_gap=4, ignore_orientation=True,
+                                        ignore_self_proximity=False))
+        label_expr = f"*_wall,*_iface"
+        proximity_size_control.set_scope(
+            prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.LABELS, label_expression=label_expr)
+        )
+        print(f"created proximity size control {proximity_size_control.id}")
 
     # compute size field
     size_field = prime.SizeField(model)
-    size_field.compute_volumetric(
+    res=size_field.compute_volumetric(
         [control.id for control in model.control_data.size_controls],
-        prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True
-                                               , enable_periodicity=False,
-                                               periodic_params=prime.SFPeriodicParams(model, axis=[1, 0, 0], angle=30,
-                                                                                      center=[0, 0, 0])))
-    print(f"computed size field {size_field}")
-    prime.FileIO(model).write_size_field(str(fname.with_suffix('.psf')), prime.WriteSizeFieldParams(model, False))
-    print(f"exported size field {str(fname.with_suffix('.psf'))} at {time.time() - t0:.2f} seconds")
+        prime.VolumetricSizeFieldComputeParams(model, enable_multi_threading=True))
+    print(f"computed size field:\n{res}")
+
+    if fname_sf is not None:
+        fname_sf_surf = str(fname.with_stem(fname.stem+'-surf').with_suffix('.psf'))
+        fname_sf_adapt = str(fname.with_stem(fname.stem + '-adapt').with_suffix('.psf'))
+        #
+        # prime.FileIO(model).write_size_field(fname_sf_surf, prime.WriteSizeFieldParams(model, False))
+        # print(f"exported size field {fname_sf_surf} at {time.time() - t0:.2f} seconds")
+        #
+        # sf = PrimeSizeField(fname_sf_surf)
+        # # sf.delete_farfield(fname_sf)
+        # sf.append(fname_sf, 6)
+        # sf.write(fname_sf_adapt)
+        #
+        # print(f"adapted size field {str(fname_sf_surf)} -> {str(fname_sf_adapt)} at {time.time() - t0:.2f} seconds")
+        print(prime.FileIO(model).read_size_field(fname_sf_adapt, prime.ReadSizeFieldParams(model, False)))
+    else:
+        prime.FileIO(model).write_size_field(str(fname.with_suffix('.psf')), prime.WriteSizeFieldParams(model, False))
+        print(f"exported size field {str(fname.with_suffix('.psf'))} at {time.time() - t0:.2f} seconds")
+
+
 
     surfer = prime.Surfer(model)
 
     # mesh ifaces
-    iface_params = prime.SurferParams(model=model, constant_size=25.0, enable_multi_threading=True)
-    iface_faces = nacelle.get_topo_faces_of_label_name_pattern("*_iface", prime.NamePatternParams(model))
-    print(surfer.mesh_topo_faces(nacelle.id, iface_faces, iface_params))
-    print(f"meshed {len(iface_faces)} iface faces: {iface_faces}")
+    # iface_params = prime.SurferParams(model=model, constant_size=25.0, enable_multi_threading=True)
+    # iface_faces = nacelle.get_topo_faces_of_label_name_pattern("*_iface", prime.NamePatternParams(model))
+    # print(surfer.mesh_topo_faces(nacelle.id, iface_faces, iface_params))
+    # print(f"meshed {len(iface_faces)} iface faces: {iface_faces}")
 
     # mesh walls
     wall_params = prime.SurferParams(model=model, generate_quads=False, size_field_type=prime.SizeFieldType.VOLUMETRIC,
                                      enable_multi_threading=True)
-    wall_faces = nacelle.get_topo_faces_of_label_name_pattern(f"*_wall,freestream{',zero_rad' if periodic else ''}",
+    wall_faces = nacelle.get_topo_faces_of_label_name_pattern(f"*_wall,*_iface,freestream{',zero_rad' if periodic else ''}",
                                                               prime.NamePatternParams(model))
     print(surfer.mesh_topo_faces(nacelle.id, wall_faces, wall_params))
     print(f"meshed {len(wall_faces)} wall faces: {wall_faces}")
 
-    if wakes:
+    if wakes and 1==2:
         # mesh wake faces
         wake_params = prime.SurferParams(model=model, generate_quads=True,
                                          size_field_type=prime.SizeFieldType.VOLUMETRIC,
                                          enable_multi_threading=True)
-    wake_faces = nacelle.get_topo_faces_of_label_name_pattern("*wake*", prime.NamePatternParams(model))
-    print(surfer.mesh_topo_faces(nacelle.id, wake_faces, wake_params))
-    print(f"meshed {len(wake_faces)} wake faces: {wake_faces}")
+        wake_faces = nacelle.get_topo_faces_of_label_name_pattern("*internal", prime.NamePatternParams(model))
+        print(surfer.mesh_topo_faces(nacelle.id, wake_faces, wake_params))
+        print(f"meshed {len(wake_faces)} wake faces: {wake_faces}")
 
     # mesh periodics
     if periodic:
@@ -146,12 +167,15 @@ def surface_mesh(model: prime.Model, fname: Path, wakes: bool = True, periodic: 
     print(f"completed surface meshing at {time.time() - t0:.2f} seconds")
 
     prime.lucid.Mesh(model).create_zones_from_labels("*")
+    nacelle.delete_topo_entities(prime.DeleteTopoEntitiesParams(model, delete_geom_zonelets=True))
+
     # compute new volumes
 
-    print(nacelle.compute_topo_volumes(
+    print(nacelle.compute_closed_volumes(
         prime.ComputeVolumesParams(model,
                                    prime.VolumeNamingType.BYFACELABEL,
                                    prime.CreateVolumeZonesType.PERNAMESOURCE, priority_ordered_names=["freestream"])))
+
     print(nacelle)
 
 
@@ -167,7 +191,7 @@ def setup_volume_controls(model, wakes: bool, periodic: bool):
         dead_control.set_scope(
             prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES, zone_expression=f"nacelle_wall*"))
         dead_control.set_params(prime.VolumeControlParams(model, prime.CellZoneletType.DEAD))
-        if wakes:
+        if wakes and 1==2:
             wake_control = model.control_data.create_volume_control()
             wake_control.set_scope(prime.ScopeDefinition(model, evaluation_type=prime.ScopeEvaluationType.ZONES,
                                                          zone_expression=f"wake_outer_internal*,wake_inner_internal*"))
@@ -265,6 +289,7 @@ def main(args):
             import ansys.meshing.prime.graphics as graphics
             display = graphics.Graphics(model)
 
+
         if args.verbose:
             model.python_logger.setLevel(logging.INFO)
             ch = logging.StreamHandler(stream=sys.stdout)
@@ -287,7 +312,7 @@ def main(args):
 
         # begin meshing
         create_material_points(model, False)
-        surface_mesh(model, fname, not args.no_wake, "periodic" in fname.name)
+        surface_mesh(model, fname, fname_sf=args.size_field, wakes=not args.no_wake, periodic="periodic" in fname.name)
         # check surface mesh quality before proceeding to volume meshing
         summary = model.parts[0].get_summary(prime.PartSummaryParams(model))
         print("Part summary:", summary)
@@ -336,6 +361,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Generate a surface mesh for a geometry using Ansys Meshing Prime.")
     parser.add_argument("fname", help="path to .scdoc file")
+    parser.add_argument("--size-field", "-sf", help="path to .psf size field file to use")
     parser.add_argument("--no-display", action="store_true", help="do not display the mesh in a window")
     parser.add_argument("-p", "--processes", type=int, default=8, help="number of processes to use for meshing")
     parser.add_argument("-t", "--threads", type=int, default=2, help="number of threads to use for meshing")

@@ -43,6 +43,10 @@ ms = np.logspace(-17,-7,1000)
 r_as = r_a(ms)
 Ls = L(ms, r_as)
 Ds = Ls/r_as
+plt.semilogx(Ls*1e6, r_as, label='r_a(m)')
+plt.grid()
+plt.show()
+
 
 
 # fc = FlightCondition(M=0.78, L=3.8 * ureg.meter, h=37000 * ureg.foot, units='SI')
