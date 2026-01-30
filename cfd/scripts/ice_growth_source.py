@@ -292,7 +292,11 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
 
     # Compute growth rate: dm/dt = a * m^b * e_fac
     # Works for both growth (e_fac > 0) and evaporation (e_fac < 0)
-    # IMPORTANT: Require m_particle > 0 to prevent phantom growth from zero ice mass
+    # IMPORTANT: Require m_particle > 1e-20 kg to prevent phantom growth from zero ice mass
+    # The threshold 1e-20 kg is chosen as:
+    #   - Far below typical ice particle masses (~1e-15 to 1e-10 kg)
+    #   - Safely above numerical precision limits for float64
+    #   - Consistent with the threshold in the m_particle calculation (line 241)
     # When m_particle = 0, growth must come from nucleation, not diffusion growth
     dm_dt = np.where(
         (n > 1e-10) & (np.abs(e_fac) > 1e-10) & (m_particle > 1e-20),
