@@ -14,20 +14,22 @@ This is a PhD research project from the University of Cambridge on **aircraft co
 
 ### CFD Solver Tests
 ```bash
-# Run nozzle flow test
-python cfd/scripts/run_nozzle_test.py
-
-# Run shock tube validation (Sod's problem)
-python cfd/scripts/run_shock_tube.py
-
-# Validate area source term against analytical solution
+# Validate area source term against analytical isentropic solution
 python cfd/scripts/validate_area_source.py
 
 # Benchmark solver performance
 python cfd/scripts/benchmark_performance.py
 
-# Run ice growth simulation
+# Run ice growth simulation (contrail microphysics)
 python cfd/scripts/ice_growth_source.py
+```
+
+### Using Test Cases Programmatically
+```python
+from cfd.test_cases import run_subsonic_nozzle_test, run_shock_tube_test
+
+solver = run_subsonic_nozzle_test(n_cells=100, n_scalars=3)
+solver, exact = run_shock_tube_test(n_cells=400, t_final=0.0002)
 ```
 
 ### Mesh Generation (requires Ansys license)
@@ -63,6 +65,8 @@ python nacelle.py  # outputs geom/nacelle.json
 - `sources.py` - Base `SourceTerm` and `ScalarSourceTerm` classes
 
 **Scripts in `cfd/scripts/`:**
+- `validate_area_source.py` - Validation against analytical isentropic nozzle flow
+- `benchmark_performance.py` - Performance benchmarking
 - `ice_growth_source.py` - `IceGrowthLookupTable` class using `ice_growth_fits.hdf5`, implements Koenig approximation for ice particle growth
 
 ### Data Files

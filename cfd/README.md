@@ -89,8 +89,9 @@ solver.plot_solution('solution.png')
 ## Directory Structure
 
 ```
-1d-test/
-├── cfd/                      # Main CFD package
+cfd/
+├── README.md                 # This file
+├── src/                      # Core library
 │   ├── __init__.py           # Package exports
 │   ├── gas.py                # Gas properties
 │   ├── state.py              # Flow state (primitive/conservative)
@@ -105,43 +106,39 @@ solver.plot_solution('solution.png')
 │   └── test_cases/
 │       ├── nozzle.py         # Nozzle flow test case
 │       └── shock_tube.py     # Shock tube test case
-│
-├── scripts/                  # Test and diagnostic scripts
-│   ├── run_nozzle_test.py    # Example: Run nozzle simulation
-│   ├── diagnose_nozzle.py    # Diagnostic: Velocity profile analysis
-│   ├── validate_area_source.py  # Validation: Compare to analytical solution
-│   ├── test_area_source_simple.py  # Simple test case
-│   ├── run_shock_tube.py     # Example: Run shock tube simulation
-│   └── benchmark_performance.py    # Performance benchmarking
-│
-└── docs/                     # Documentation
-    ├── README.md             # This file
-    ├── BUGFIX_AREA_SOURCE.md # Area source term bug fix documentation
-    ├── CONVERGENCE_FIX.md    # Convergence improvements
-    ├── OPTIMIZATION_SUMMARY.md  # Performance optimization notes
-    ├── PERFORMANCE.md        # Performance benchmarks
-    └── QUASI_1D_FORMULATION.py  # Quasi-1D equations reference
+├── scripts/
+│   ├── validate_area_source.py   # Validation against analytical solution
+│   ├── benchmark_performance.py  # Performance benchmarking
+│   └── ice_growth_source.py      # Ice particle growth for contrails
+└── docs/
+    └── BUGFIX_AREA_SOURCE.md     # Documents critical area source fix
 ```
 
 ## Running Examples
 
-From the `1d-test` directory:
+From the `cfd` directory:
 
 ```bash
-# Run basic nozzle test
-python scripts/run_nozzle_test.py
-
-# Run diagnostic (checks velocity peaks at throat)
-python scripts/diagnose_nozzle.py
-
-# Run validation against analytical solution
+# Run validation against analytical isentropic nozzle solution
 python scripts/validate_area_source.py
 
-# Run shock tube test (Sod's problem)
-python scripts/run_shock_tube.py
-
-# Benchmark performance
+# Benchmark solver performance
 python scripts/benchmark_performance.py
+
+# Run ice growth simulation (contrail microphysics)
+python scripts/ice_growth_source.py
+```
+
+Or use the test cases programmatically:
+
+```python
+from cfd.test_cases import run_subsonic_nozzle_test, run_shock_tube_test
+
+# Nozzle flow test
+solver = run_subsonic_nozzle_test(n_cells=100, n_scalars=3)
+
+# Shock tube test (Sod's problem)
+solver, exact = run_shock_tube_test(n_cells=400, t_final=0.0002)
 ```
 
 ## Test Cases
