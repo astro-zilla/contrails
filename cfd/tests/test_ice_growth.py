@@ -134,35 +134,33 @@ class TestZeroIceGrowth:
         assert np.all(np.abs(sources[2]) < 1e-5), \
             f"Ice growth should be small for tiny ice mass with low supersaturation, got max {np.max(np.abs(sources[2]))}"
     
-    def test_zero_ice_with_particles_and_supersaturation_gives_no_growth(self, gas, simple_mesh, lookup_table):
-        """CRITICAL: Zero ice mass should give zero growth even with particles and supersaturation.
+    def test_zero_ice_with_particles_and_low_supersaturation_gives_no_growth(self, gas, simple_mesh, lookup_table):
+        """Zero ice mass with LOW supersaturation should give zero growth.
         
-        This is the key test that was missing! When ice_initial=0 but nucleation sites exist,
-        growth should NOT occur until nucleation creates ice mass. The diffusion growth equation
-        dm/dt = a * m^b * e_fac requires existing ice mass on particles (m > 0).
-        
-        Nucleation is a separate process (not yet implemented) that creates initial ice mass.
+        When ice_initial=0 but nucleation sites exist with LOW supersaturation
+        (below nucleation threshold), neither diffusion growth nor nucleation should occur.
+        The diffusion growth equation dm/dt = a * m^b * e_fac requires existing ice mass (m > 0),
+        and nucleation requires e_fac > e_fac_critical (default 0.6).
         """
         from cfd.scripts.ice_growth_source import ice_growth_source_term
 
-        # Create state with ZERO ice but particles exist and high supersaturation
+        # Create state with ZERO ice, particles exist, but LOW supersaturation
         state = create_test_state(
             gas, simple_mesh.n_cells,
             n_specific=1e15,  # Particles exist (potential nucleation sites)
-            Y_vapor=1e-3,     # High vapor -> supersaturated conditions
+            Y_vapor=1e-6,     # Low vapor -> below nucleation threshold
             Y_ice=0.0         # ZERO ice mass - no existing ice to grow
         )
 
         sources = ice_growth_source_term(state, simple_mesh, lookup_table)
 
-        # With zero ice mass, diffusion growth should be EXACTLY zero
-        # (Nucleation is a separate process, not yet implemented)
+        # With zero ice mass and low supersaturation, no growth or nucleation
         assert np.allclose(sources[2], 0.0), \
-            f"Ice growth MUST be zero when ice mass is zero (no ice mass on particles to grow), got {sources[2]}"
+            f"No growth or nucleation when ice=0 and low supersaturation, got {sources[2]}"
         
         # Verify no vapor consumption either
         assert np.allclose(sources[1], 0.0), \
-            f"Vapor consumption should be zero when no ice growth occurs, got {sources[1]}"
+            f"Vapor consumption should be zero when no growth/nucleation occurs, got {sources[1]}"
 
 
 class TestSubsaturatedConditions:
@@ -335,7 +333,7 @@ class TestNucleation:
         """Verify no nucleation at moderate supersaturation (below critical threshold).
         
         Even at moderate supersaturation (e_fac ~ 0.3-0.4), which is still below
-        the critical threshold for nucleation (~0.4-0.6), no ice formation should occur.
+        the critical threshold for nucleation (~0.6), no ice formation should occur.
         """
         from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water, R, M_w
         
@@ -362,20 +360,72 @@ class TestNucleation:
         
         sources = ice_growth_source_term(state, simple_mesh, lookup_table)
         
-        # Still below nucleation threshold
+        # Still below nucleation threshold - no nucleation should occur
         assert np.allclose(sources[2], 0.0), \
-            f"No nucleation at moderate supersaturation (e_fac ~ 0.35), got {sources[2]}"
+            f"No nucleation at moderate supersaturation (e_fac ~ 0.35 < 0.6), got {sources[2]}"
     
-    def test_high_supersaturation_without_nucleation_gives_zero_growth(self, gas, simple_mesh, lookup_table):
-        """Verify that even at HIGH supersaturation, zero ice gives zero growth.
+    def test_nucleation_threshold_behavior(self, gas, simple_mesh, lookup_table):
+        """Test nucleation occurs just above threshold but not just below.
         
-        At high supersaturation (e_fac > 0.6), nucleation WOULD occur in reality.
-        However, since nucleation is not yet implemented, we should still get zero growth
-        from zero ice mass. This test documents expected future behavior.
+        Verify that the nucleation threshold is sharp:
+        - e_fac = 0.55 (below threshold): no nucleation
+        - e_fac = 0.65 (above threshold): nucleation occurs
+        """
+        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water, R, M_w
         
-        Once nucleation is implemented, this test should be updated to verify:
+        T = 220.0
+        p_total = 25000.0
+        rho = p_total / (gas.R * T)
+        
+        p_sat_ice_val = psat_ice(np.array([T]))[0]
+        p_sat_water_val = psat_water(np.array([T]))[0]
+        
+        # Test below threshold (e_fac = 0.55)
+        target_p_vapor_below = p_sat_ice_val + 0.55 * (p_sat_water_val - p_sat_ice_val)
+        rho_vapor_below = target_p_vapor_below * M_w / (R * T)
+        Y_vapor_below = rho_vapor_below / rho
+        
+        state_below = create_test_state(
+            gas, simple_mesh.n_cells,
+            rho=rho, T=T,
+            n_specific=1e15,
+            Y_vapor=Y_vapor_below,
+            Y_ice=0.0
+        )
+        
+        sources_below = ice_growth_source_term(state_below, simple_mesh, lookup_table)
+        
+        # Just below threshold: no nucleation
+        assert np.allclose(sources_below[2], 0.0), \
+            f"No nucleation below threshold (e_fac=0.55), got {sources_below[2]}"
+        
+        # Test above threshold (e_fac = 0.65)
+        target_p_vapor_above = p_sat_ice_val + 0.65 * (p_sat_water_val - p_sat_ice_val)
+        rho_vapor_above = target_p_vapor_above * M_w / (R * T)
+        Y_vapor_above = rho_vapor_above / rho
+        
+        state_above = create_test_state(
+            gas, simple_mesh.n_cells,
+            rho=rho, T=T,
+            n_specific=1e15,
+            Y_vapor=Y_vapor_above,
+            Y_ice=0.0
+        )
+        
+        sources_above = ice_growth_source_term(state_above, simple_mesh, lookup_table)
+        
+        # Just above threshold: nucleation occurs
+        assert np.all(sources_above[2] > 0), \
+            f"Nucleation should occur above threshold (e_fac=0.65), got {sources_above[2]}"
+    
+    def test_high_supersaturation_with_nucleation_creates_ice(self, gas, simple_mesh, lookup_table):
+        """Verify that nucleation occurs at HIGH supersaturation.
+        
+        At high supersaturation (e_fac > 0.6), nucleation SHOULD occur when ice mass is zero.
+        This test verifies:
         - Nucleation DOES occur when e_fac > critical threshold
         - Ice source becomes positive (new ice mass created)
+        - Vapor is consumed
         """
         from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water, R, M_w
         
@@ -402,14 +452,18 @@ class TestNucleation:
         
         sources = ice_growth_source_term(state, simple_mesh, lookup_table)
         
-        # Currently: no nucleation implemented → zero growth
-        # Future: nucleation should occur → positive ice source
-        assert np.allclose(sources[2], 0.0), \
-            f"Current implementation (no nucleation): should get zero growth, got {sources[2]}"
+        # With nucleation implemented: positive ice source
+        assert np.all(sources[2] > 0), \
+            f"Nucleation should occur at high supersaturation (e_fac ~ 0.8), got {sources[2]}"
         
-        # TODO: Once nucleation is implemented, update this test:
-        # assert sources[2] > 0, "Nucleation should occur at high supersaturation (e_fac ~ 0.8)"
-        # assert sources[1] < 0, "Vapor should be consumed by nucleation"
+        # Vapor should be consumed
+        assert np.all(sources[1] < 0), \
+            f"Vapor should be consumed by nucleation, got {sources[1]}"
+        
+        # Verify mass conservation
+        total_source = sources[1] + sources[2]
+        assert np.allclose(total_source, 0.0), \
+            f"Mass should be conserved during nucleation, got total {total_source}"
     
     def test_supersaturation_threshold_documentation(self, gas, simple_mesh, lookup_table):
         """Document the expected supersaturation threshold for nucleation.

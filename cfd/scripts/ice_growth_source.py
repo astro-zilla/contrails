@@ -198,9 +198,11 @@ def psat_water(T: np.ndarray, p: np.ndarray = None) -> np.ndarray:
 
 
 def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
-                           lookup_table: IceGrowthLookupTable) -> np.ndarray:
+                           lookup_table: IceGrowthLookupTable,
+                           e_fac_critical: float = 0.6,
+                           m_initial: float = 1e-18) -> np.ndarray:
     """
-    Compute ice growth source terms using Koenig approximation.
+    Compute ice growth source terms using Koenig approximation with nucleation.
 
     Scalars:
         Y[0] = n/ρ: Specific particle number density [#/kg]
@@ -210,14 +212,18 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
     Physics:
         - Particle number is conserved (no source)
         - Ice particles grow/evaporate: dm/dt = a * m^b * e_fac
+        - Nucleation: creates initial ice mass when e_fac > e_fac_critical
         - e_fac > 0: ice grows (vapor → ice), e_fac < 0: ice evaporates (ice → vapor)
-        - Ice mass changes: source = n * dm/dt
+        - Ice mass changes: source = n * dm/dt + nucleation
         - e_fac accounts for actual supersaturation vs. table values (at saturation)
 
     Args:
         state: Current flow state
         mesh: Computational mesh
         lookup_table: Pre-loaded ice growth lookup table
+        e_fac_critical: Critical supersaturation factor for nucleation (default: 0.6)
+                        Corresponds to S_ice ~ 1.4 for heterogeneous nucleation
+        m_initial: Initial ice mass per nucleated particle [kg] (default: 1e-18)
 
     Returns:
         sources: Source terms [kg/(m³·s)] for each scalar
@@ -304,45 +310,75 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
         0.0
     )
 
-    # Total ice mass growth/evaporation rate per unit volume
+    # Total ice mass growth/evaporation rate per unit volume from diffusion
     ice_growth_rate = n * dm_dt
+
+    # =========================================================================
+    # NUCLEATION: Create initial ice mass when supersaturation exceeds threshold
+    # =========================================================================
+    # Heterogeneous nucleation occurs when:
+    # 1. Supersaturation exceeds critical threshold (e_fac > e_fac_critical)
+    # 2. Ice mass is (nearly) zero (m_particle < 1e-20 kg)
+    # 3. Particles exist as nucleation sites (n > 1e-10 #/m³)
+    #
+    # Model: Instantaneous nucleation creates small ice mass on all particles
+    # Time scale for nucleation: assume rapid (dt_nucleation ~ 0.01 s)
+    # This is a simplified model; more sophisticated approaches could include:
+    # - Gradual nucleation over time
+    # - Fraction of particles that nucleate
+    # - Aerosol size distribution effects
+    
+    dt_nucleation = 0.01  # seconds - characteristic time for nucleation
+    
+    nucleation_rate = np.where(
+        (e_fac > e_fac_critical) & (m_particle < 1e-20) & (n > 1e-10),
+        n * m_initial / dt_nucleation,  # [kg/(m³·s)]
+        0.0
+    )
+    
+    # Total ice source: diffusion growth + nucleation
+    ice_total_rate = ice_growth_rate + nucleation_rate
 
     # Limit growth by available vapor (when growing)
     dt_typical = 1e-3  # seconds
     max_vapor_consumption = rho_vapor / dt_typical
-    ice_growth_rate = np.where(
-        ice_growth_rate > 0,
-        np.minimum(ice_growth_rate, max_vapor_consumption),
-        ice_growth_rate
+    ice_total_rate = np.where(
+        ice_total_rate > 0,
+        np.minimum(ice_total_rate, max_vapor_consumption),
+        ice_total_rate
     )
 
     # Limit evaporation by available ice (when evaporating)
     max_ice_evaporation = rho_ice / dt_typical
-    ice_growth_rate = np.where(
-        ice_growth_rate < 0,
-        np.maximum(ice_growth_rate, -max_ice_evaporation),
-        ice_growth_rate
+    ice_total_rate = np.where(
+        ice_total_rate < 0,
+        np.maximum(ice_total_rate, -max_ice_evaporation),
+        ice_total_rate
     )
 
     # Apply sources
     # Scalar 0: Particle number (conserved)
     sources[0] = 0.0
 
-    # Scalar 1: Water vapor (consumed by ice growth)
-    sources[1] = -ice_growth_rate
+    # Scalar 1: Water vapor (consumed by ice growth and nucleation)
+    sources[1] = -ice_total_rate
 
-    # Scalar 2: Ice mass (grows from vapor)
-    sources[2] = ice_growth_rate
+    # Scalar 2: Ice mass (grows from vapor via diffusion and nucleation)
+    sources[2] = ice_total_rate
 
     return sources
 
 
-def create_ice_growth_source(hdf5_path: str = None) -> ScalarSourceTerm:
+def create_ice_growth_source(hdf5_path: str = None, 
+                             e_fac_critical: float = 0.6,
+                             m_initial: float = 1e-18) -> ScalarSourceTerm:
     """
-    Factory function to create ice growth source term with lookup table.
+    Factory function to create ice growth source term with lookup table and nucleation.
 
     Args:
         hdf5_path: Path to ice growth coefficient HDF5 file
+        e_fac_critical: Critical supersaturation factor for nucleation (default: 0.6)
+        m_initial: Initial ice mass per nucleated particle [kg] (default: 1e-18)
 
     Returns:
         ScalarSourceTerm object ready to add to solver
@@ -350,13 +386,17 @@ def create_ice_growth_source(hdf5_path: str = None) -> ScalarSourceTerm:
     Example:
         >>> ice_source = create_ice_growth_source()
         >>> solver.add_source_term(ice_source)
+        
+        >>> # Custom nucleation threshold
+        >>> ice_source = create_ice_growth_source(e_fac_critical=0.5, m_initial=1e-17)
+        >>> solver.add_source_term(ice_source)
     """
     # Load lookup table once
     lookup_table = IceGrowthLookupTable(hdf5_path)
 
-    # Create closure that captures the lookup table
+    # Create closure that captures the lookup table and nucleation parameters
     def source_function(state: FlowState, mesh: Mesh1D) -> np.ndarray:
-        return ice_growth_source_term(state, mesh, lookup_table)
+        return ice_growth_source_term(state, mesh, lookup_table, e_fac_critical, m_initial)
 
     return ScalarSourceTerm(source_function)
 
@@ -417,10 +457,17 @@ def example_contrail_simulation():
     p_exit = 22000.0  # Exit pressure only slightly lower (smaller pressure drop)
 
     # Initial conditions for scalars
-    # Testing the bug fix: ice_initial=0 should give NO growth until nucleation
+    # Use moderate vapor to demonstrate nucleation
+    # At T~217K, p_sat_ice ~ 2.5 Pa, p_sat_water ~ 4.3 Pa
+    # For nucleation to occur, we need e_fac > 0.6
+    # This requires p_vapor > p_sat_ice + 0.6*(p_sat_water - p_sat_ice)
+    # p_vapor > 2.5 + 0.6*(4.3-2.5) = 2.5 + 1.08 = 3.58 Pa
+    # At rho ~ 0.37 kg/m³, T ~ 217K: Y_vapor = p_vapor * M_w / (R * T * rho)
+    # Y_vapor = 3.58 * 0.018 / (8.314 * 217) * rho / rho ≈ 3.6e-5
+    # Use slightly higher to ensure nucleation: Y_vapor ~ 1e-4
     n_initial = 1e12           # Particle number density [#/m³]
-    vapor_initial = 5e-5       # Initial vapor mass fraction (low - below nucleation)
-    ice_initial = 0.0          # Initial ice mass fraction (ZERO - no existing ice)
+    vapor_initial = 1e-4       # Initial vapor mass fraction (moderate - above nucleation threshold)
+    ice_initial = 0.0          # Initial ice mass fraction (ZERO - will nucleate)
 
     # Convert to specific quantities (per unit total mass)
     # Use correct density for cruise altitude
