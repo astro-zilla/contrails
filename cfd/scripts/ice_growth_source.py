@@ -24,14 +24,14 @@ from pathlib import Path
 import numpy as np
 import h5py
 
-# Add parent directory to path for src imports
-project_root = Path(__file__).parent.parent
+# Add project root (parent of cfd folder) to path for imports
+project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from cfd import ScalarSourceTerm
-from cfd.state import FlowState
-from cfd.mesh import Mesh1D
+from cfd.src import ScalarSourceTerm
+from cfd.src.state import FlowState
+from cfd.src.mesh import Mesh1D
 
 
 class IceGrowthLookupTable:
@@ -41,13 +41,16 @@ class IceGrowthLookupTable:
     Loads and interpolates pre-computed values from HDF5 file.
     """
 
-    def __init__(self, hdf5_path: str = '../../ice_growth_fits.hdf5'):
+    def __init__(self, hdf5_path: str = None):
         """
         Load ice growth lookup table from HDF5 file.
 
         Args:
-            hdf5_path: Path to HDF5 file with ice growth coefficients
+            hdf5_path: Path to HDF5 file with ice growth coefficients.
+                       Defaults to ice_growth_fits.hdf5 in project root.
         """
+        if hdf5_path is None:
+            hdf5_path = project_root / 'ice_growth_fits.hdf5'
         self.hdf5_path = Path(hdf5_path)
 
         if not self.hdf5_path.exists():
@@ -328,7 +331,7 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
     return sources
 
 
-def create_ice_growth_source(hdf5_path: str = '../ice_growth_fits.hdf5') -> ScalarSourceTerm:
+def create_ice_growth_source(hdf5_path: str = None) -> ScalarSourceTerm:
     """
     Factory function to create ice growth source term with lookup table.
 
@@ -364,8 +367,8 @@ def example_contrail_simulation():
     print("EXAMPLE: Contrail Simulation with Ice Growth")
     print("="*80 + "\n")
 
-    from cfd import GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig
-    from cfd.boundary import SubsonicInletBC, SubsonicOutletBC
+    from cfd.src import GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig
+    from cfd.src.boundary import SubsonicInletBC, SubsonicOutletBC
 
     # Gas properties
     gas = GasProperties(gamma=1.4, R=287.0)
@@ -389,7 +392,7 @@ def example_contrail_simulation():
 
     # Add ice growth source term
     try:
-        ice_source = create_ice_growth_source('../ice_growth_fits.hdf5')
+        ice_source = create_ice_growth_source()
         solver.add_source_term(ice_source)
         print("✓ Ice growth source term added successfully\n")
     except FileNotFoundError as e:
@@ -490,7 +493,7 @@ if __name__ == "__main__":
         print("\n" + "="*80)
         print("Ice Growth Lookup Table Information")
         print("="*80)
-        lookup = IceGrowthLookupTable('../ice_growth_fits.hdf5')
+        lookup = IceGrowthLookupTable()
         print("✓ Lookup table loaded successfully!\n")
 
         # Test interpolation at a sample point
@@ -525,7 +528,7 @@ if __name__ == "__main__":
 from ice_growth_source import create_ice_growth_source
 
 # In your simulation setup:
-ice_source = create_ice_growth_source('../ice_growth_fits.hdf5')
+ice_source = create_ice_growth_source()
 solver.add_source_term(ice_source)
 
 # Initial conditions for 3 scalars:

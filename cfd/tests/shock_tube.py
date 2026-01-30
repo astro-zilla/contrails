@@ -22,7 +22,7 @@ This provides a rigorous test of:
 import numpy as np
 from typing import Tuple
 
-from cfd import (
+from cfd.src import (
     GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig,
     BoundaryCondition
 )

@@ -4,7 +4,7 @@ Subsonic nozzle flow test case.
 
 import numpy as np
 
-from cfd import (
+from cfd.src import (
     GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig,
     SubsonicInletBC, SubsonicOutletBC, ScalarSourceTerm
 )
