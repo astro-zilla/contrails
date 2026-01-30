@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) and GitHub Copilot when working with code in this repository.
 
 ## Project Overview
 
@@ -9,6 +9,19 @@ This is a PhD research project from the University of Cambridge on **aircraft co
 - CFD (1D compressible flow solver)
 - Ice particle microphysics
 - Mesh generation using Ansys Meshing Prime
+
+## Quick Start
+
+```bash
+# Install core dependencies
+pip install numpy scipy matplotlib h5py pytest
+
+# Run all tests to verify setup
+pytest cfd/tests/ -v
+
+# Validate the CFD solver against analytical solutions
+python cfd/scripts/validate_area_source.py
+```
 
 ## Key Commands
 
@@ -20,6 +33,7 @@ pytest cfd/tests/ -v
 # Run specific test files
 pytest cfd/tests/test_nozzle.py -v
 pytest cfd/tests/test_shock_tube.py -v
+pytest cfd/tests/test_ice_growth.py -v
 
 # Validate area source term against analytical isentropic solution
 python cfd/scripts/validate_area_source.py
@@ -104,13 +118,6 @@ def my_source(state: FlowState, mesh: Mesh1D) -> np.ndarray:
 solver.add_source_term(ScalarSourceTerm(my_source))
 ```
 
-### Units
-The project uses Pint for physical units. Import via:
-```python
-from flightcondition import unit
-# e.g., engine.D = (81 * unit('in')).to('m')
-```
-
 ## Quasi-1D Equations
 
 The CFD solver implements:
@@ -128,3 +135,93 @@ The CFD solver implements:
 - `flightcondition` - flight condition utilities
 - `svgpathtools` - SVG geometry
 - `ansys.meshing.prime` - mesh generation (commercial)
+
+## Code Style & Conventions
+
+### Python Style
+- **Type hints**: Use type hints for function signatures (see `FlowState`, `Mesh1D` classes)
+- **Docstrings**: Google-style docstrings with Args/Returns sections
+- **NumPy**: Prefer vectorized NumPy operations over Python loops for performance
+- **Dataclasses**: Use `@dataclass` for data containers (see `jet.py`, `setup.py`)
+
+### Naming Conventions
+- **Physical quantities**: Use standard notation (e.g., `rho` for density, `p` for pressure, `T` for temperature, `M` for Mach number)
+- **Greek letters**: Spell out (e.g., `gamma` not `γ`, `rho` not `ρ`)
+- **Private methods**: Prefix with underscore (e.g., `_compute_flux`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `M_H2O = 18.02`)
+
+### Units
+The project uses Pint for physical units. Import via:
+```python
+from flightcondition import unit
+# e.g., engine.D = (81 * unit('in')).to('m')
+```
+
+## Testing Approach
+
+### Test Structure
+- Tests live in `cfd/tests/` and follow pytest conventions
+- Fixtures defined in test files (not conftest.py currently)
+- Test classes group related tests (e.g., `TestMassConservation`, `TestPhysicalBounds`)
+
+### Writing New Tests
+```python
+import pytest
+import numpy as np
+from cfd import GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig
+
+@pytest.fixture
+def gas():
+    """Standard air properties."""
+    return GasProperties(gamma=1.4, R=287.0)
+
+class TestNewFeature:
+    def test_feature_works(self, gas):
+        # Test implementation
+        assert result == expected
+```
+
+### Test Markers
+```bash
+# Skip slow tests
+pytest -m "not slow"
+```
+
+## Common Debugging Tips
+
+### CFD Solver Issues
+1. **Solver not converging**: Try reducing CFL number (0.3-0.5), use `use_first_order=True`
+2. **Negative density/pressure**: Check boundary conditions, reduce time step
+3. **Mass flow variation**: Verify area source term is enabled for variable-area meshes
+
+### Checking Solution Quality
+```python
+# After solving
+state = solver.get_state()
+
+# Check mass conservation
+mdot = state.rho * state.u * mesh.A_cells
+print(f"Mass flow variation: {(mdot.max() - mdot.min()) / mdot.mean() * 100:.2f}%")
+
+# Check isentropic relations
+T0 = state.T * (1 + 0.5 * (gas.gamma - 1) * state.M**2)
+print(f"T0 variation: {(T0.max() - T0.min()) / T0.mean() * 100:.2f}%")
+```
+
+## Agent Guidelines
+
+### When Making Changes
+1. **Run tests first**: `pytest cfd/tests/ -v` to understand baseline
+2. **Make minimal changes**: This is research code—preserve existing behavior
+3. **Validate physics**: CFD changes should conserve mass, energy, and entropy (for isentropic flows)
+4. **Check units**: Pint catches unit errors—don't suppress warnings
+
+### File Organization
+- **New CFD features**: Add to `cfd/src/`, export in `cfd/src/__init__.py`
+- **New test cases**: Add to `cfd/tests/`, follow existing patterns
+- **Documentation**: Update this file and `cfd/README.md` as needed
+
+### Don't Modify Without Understanding
+- `cfd/src/area_source.py` - Critical geometric source term (see `cfd/docs/BUGFIX_AREA_SOURCE.md`)
+- `cfd/src/flux.py` - HLLC Riemann solver implementation
+- `jet.py` - Engine thermodynamics with complex Pint unit handling
