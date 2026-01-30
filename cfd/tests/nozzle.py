@@ -4,12 +4,10 @@ Subsonic nozzle flow test case.
 
 import numpy as np
 
-from ..gas import GasProperties
-from ..state import FlowState
-from ..mesh import Mesh1D
-from ..solver import Solver1D, SolverConfig
-from ..boundary import SubsonicInletBC, SubsonicOutletBC
-from ..sources import ScalarSourceTerm
+from cfd import (
+    GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig,
+    SubsonicInletBC, SubsonicOutletBC, ScalarSourceTerm
+)
 
 
 def nozzle_area(x: np.ndarray, x_throat: float = 0.5,

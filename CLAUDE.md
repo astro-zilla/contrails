@@ -14,6 +14,13 @@ This is a PhD research project from the University of Cambridge on **aircraft co
 
 ### CFD Solver Tests
 ```bash
+# Run all pytest tests
+pytest cfd/tests/ -v
+
+# Run specific test files
+pytest cfd/tests/test_nozzle.py -v
+pytest cfd/tests/test_shock_tube.py -v
+
 # Validate area source term against analytical isentropic solution
 python cfd/scripts/validate_area_source.py
 
@@ -26,7 +33,7 @@ python cfd/scripts/ice_growth_source.py
 
 ### Using Test Cases Programmatically
 ```python
-from cfd.test_cases import run_subsonic_nozzle_test, run_shock_tube_test
+from cfd.tests import run_subsonic_nozzle_test, run_shock_tube_test
 
 solver = run_subsonic_nozzle_test(n_cells=100, n_scalars=3)
 solver, exact = run_shock_tube_test(n_cells=400, t_final=0.0002)

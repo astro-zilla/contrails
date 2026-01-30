@@ -22,11 +22,10 @@ This provides a rigorous test of:
 import numpy as np
 from typing import Tuple
 
-from ..gas import GasProperties
-from ..state import FlowState
-from ..mesh import Mesh1D
-from ..solver import Solver1D, SolverConfig
-from ..boundary import BoundaryCondition
+from cfd import (
+    GasProperties, FlowState, Mesh1D, Solver1D, SolverConfig,
+    BoundaryCondition
+)
 
 
 class ReflectiveWallBC(BoundaryCondition):

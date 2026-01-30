@@ -47,8 +47,10 @@ class AreaSourceTerm(SourceTerm):
         # dA/dx ≈ (A_{i+1} - A_{i-1}) / (x_{i+1} - x_{i-1})
         dA_dx = (mesh.A_faces[1:] - mesh.A_faces[:-1]) / mesh.dx
 
-        # Momentum source: S = p * dA/dx
+        # Momentum source: S = (p/A) * dA/dx
+        # For quasi-1D flow solving per-volume variables (ρ, ρu, ρE),
+        # the source term is (p/A) * dA/dx, not p * dA/dx
         # Note: This goes into the momentum equation (index 1)
-        S[1, :] = state.p * dA_dx
+        S[1, :] = state.p * dA_dx / mesh.A_cells
 
         return S

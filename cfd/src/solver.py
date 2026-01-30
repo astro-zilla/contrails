@@ -304,12 +304,11 @@ class Solver1D:
 
         # Row 3: Scalars
         if has_ice_growth:
-            # Plot particle number density
-            n = state.Y[0] * state.rho
-            axes.flat[ax_idx].plot(x, n, 'orange', linewidth=2)
+            # Plot specific particle number (should be conserved/constant)
+            axes.flat[ax_idx].plot(x, state.Y[0], 'orange', linewidth=2)
             axes.flat[ax_idx].set_xlabel('x [m]')
-            axes.flat[ax_idx].set_ylabel('Number density [#/m³]')
-            axes.flat[ax_idx].set_title('Particle Number Density')
+            axes.flat[ax_idx].set_ylabel('Specific number [#/kg]')
+            axes.flat[ax_idx].set_title('Specific Particle Number (n/ρ)')
             axes.flat[ax_idx].grid(True)
             axes.flat[ax_idx].ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
             ax_idx += 1
