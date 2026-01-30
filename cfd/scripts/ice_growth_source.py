@@ -6,16 +6,17 @@ Implements scalar transport for:
 - Scalar 1: Water vapor mass density ρ_vapor [kg/m³]
 - Scalar 2: Ice mass density ρ_ice [kg/m³]
 
-Uses Koenig approximation for ice particle growth:
-    dm/mt = a * m^b * e_fac
+Uses Koenig approximation for ice particle growth and evaporation:
+    dm/dt = a * m^b * e_fac
 
 where:
 - a and b are interpolated from pre-computed lookup tables (at saturation)
-- e_fac = (e_actual - e_ice) / (e_water - e_ice) is the supersaturation factor
-- e = (p_vapor - p_sat_ice) / (p_sat_water - p_sat_ice)
+- e_fac = (p_vapor - p_sat_ice) / (p_sat_water - p_sat_ice) is the supersaturation factor
+- e_fac > 0: supersaturated → ice growth (vapor → ice)
+- e_fac < 0: subsaturated → ice evaporation (ice → vapor)
 
 The lookup table stores coefficients computed at water saturation (e=1),
-so we multiply by e_fac to get the actual growth rate.
+and e_fac scales the rate for actual conditions including evaporation.
 """
 
 import sys
@@ -205,8 +206,9 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
 
     Physics:
         - Particle number is conserved (no source)
-        - Vapor condenses onto ice particles: dm/dt = a * m^b * e_fac
-        - Ice mass increases from vapor: source = n * dm/dt
+        - Ice particles grow/evaporate: dm/dt = a * m^b * e_fac
+        - e_fac > 0: ice grows (vapor → ice), e_fac < 0: ice evaporates (ice → vapor)
+        - Ice mass changes: source = n * dm/dt
         - e_fac accounts for actual supersaturation vs. table values (at saturation)
 
     Args:
@@ -270,40 +272,48 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
     # e_fac = (p_vapor - p_sat_ice) / (p_sat_water - p_sat_ice)
     # At water saturation: e_fac = 1
     # At ice saturation: e_fac = 0
-    # e < 0 means subsaturated (p_vapor < p_sat_ice) - NO GROWTH!
+    # e_fac < 0: subsaturated → evaporation (ice → vapor)
+    # e_fac > 0: supersaturated → growth (vapor → ice)
 
-    # CRITICAL: Check if supersaturated w.r.t. ice FIRST
-    supersaturated = p_vapor > p_sat_ice
-
-    # Only compute e_fac where supersaturated
+    # Compute e_fac for all conditions (including subsaturated)
     denominator = p_sat_water - p_sat_ice
     e_fac = np.where(
-        supersaturated & (np.abs(denominator) > 1e-6),
+        np.abs(denominator) > 1e-6,
         (p_vapor - p_sat_ice) / denominator,
-        0.0  # Subsaturated or invalid denominator -> no growth
+        0.0  # Invalid denominator -> no growth/evaporation
     )
 
-    # Cap extreme supersaturation for numerical stability
-    e_fac = np.clip(e_fac, 0.0, 2.0)
+    # Cap extreme values for numerical stability
+    # Allow negative e_fac for evaporation
+    e_fac = np.clip(e_fac, -2.0, 2.0)
 
     # Compute growth rate: dm/dt = a * m^b * e_fac
-    # ONLY where supersaturated (e_fac > 0)
+    # Works for both growth (e_fac > 0) and evaporation (e_fac < 0)
     dm_dt = np.where(
-        (n > 1e-10) & (rho_vapor > 1e-20) & (e_fac > 1e-10),  # Require positive e_fac
+        (n > 1e-10) & (np.abs(e_fac) > 1e-10),  # Require particles and non-zero e_fac
         a * np.power(np.maximum(m_particle, 1e-20), b) * e_fac,
         0.0
     )
 
-    # Total ice mass growth rate per unit volume
+    # Total ice mass growth/evaporation rate per unit volume
     ice_growth_rate = n * dm_dt
 
-    # Limit growth by available vapor (conservative)
+    # Limit growth by available vapor (when growing)
     dt_typical = 1e-3  # seconds
     max_vapor_consumption = rho_vapor / dt_typical
-    ice_growth_rate = np.minimum(ice_growth_rate, max_vapor_consumption)
+    ice_growth_rate = np.where(
+        ice_growth_rate > 0,
+        np.minimum(ice_growth_rate, max_vapor_consumption),
+        ice_growth_rate
+    )
 
-    # FINAL SAFETY: Explicitly zero out growth where subsaturated
-    ice_growth_rate = np.where(supersaturated, ice_growth_rate, 0.0)
+    # Limit evaporation by available ice (when evaporating)
+    max_ice_evaporation = rho_ice / dt_typical
+    ice_growth_rate = np.where(
+        ice_growth_rate < 0,
+        np.maximum(ice_growth_rate, -max_ice_evaporation),
+        ice_growth_rate
+    )
 
     # Apply sources
     # Scalar 0: Particle number (conserved)
