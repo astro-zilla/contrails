@@ -133,6 +133,34 @@ class TestZeroIceGrowth:
         # Growth should be very small or zero (below nucleation threshold)
         assert np.all(np.abs(sources[2]) < 1e-5), \
             f"Ice growth should be small for tiny ice mass with low supersaturation, got max {np.max(np.abs(sources[2]))}"
+    
+    def test_zero_ice_with_particles_and_supersaturation_gives_no_growth(self, gas, simple_mesh, lookup_table):
+        """CRITICAL: Zero ice mass should give zero growth even with particles and supersaturation.
+        
+        This is the key test that was missing! When ice_initial=0 but particles exist,
+        growth should NOT occur until nucleation happens. The diffusion growth equation
+        dm/dt = a * m^b * e_fac only applies to existing ice particles.
+        """
+        from cfd.scripts.ice_growth_source import ice_growth_source_term
+
+        # Create state with ZERO ice but particles exist and high supersaturation
+        state = create_test_state(
+            gas, simple_mesh.n_cells,
+            n_specific=1e15,  # Particles exist (potential nucleation sites)
+            Y_vapor=1e-3,     # High vapor -> supersaturated conditions
+            Y_ice=0.0         # ZERO ice mass - no existing ice to grow
+        )
+
+        sources = ice_growth_source_term(state, simple_mesh, lookup_table)
+
+        # With zero ice mass, diffusion growth should be EXACTLY zero
+        # (Nucleation is a separate process, not yet implemented)
+        assert np.allclose(sources[2], 0.0), \
+            f"Ice growth MUST be zero when ice mass is zero (no particles to grow), got {sources[2]}"
+        
+        # Verify no vapor consumption either
+        assert np.allclose(sources[1], 0.0), \
+            f"Vapor consumption should be zero when no ice growth occurs, got {sources[1]}"
 
 
 class TestSubsaturatedConditions:

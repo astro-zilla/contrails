@@ -292,9 +292,11 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
 
     # Compute growth rate: dm/dt = a * m^b * e_fac
     # Works for both growth (e_fac > 0) and evaporation (e_fac < 0)
+    # IMPORTANT: Require m_particle > 0 to prevent phantom growth from zero ice mass
+    # When m_particle = 0, growth must come from nucleation, not diffusion growth
     dm_dt = np.where(
-        (n > 1e-10) & (np.abs(e_fac) > 1e-10),  # Require particles and non-zero e_fac
-        a * np.power(np.maximum(m_particle, 1e-20), b) * e_fac,
+        (n > 1e-10) & (np.abs(e_fac) > 1e-10) & (m_particle > 1e-20),
+        a * np.power(m_particle, b) * e_fac,
         0.0
     )
 
@@ -410,10 +412,11 @@ def example_contrail_simulation():
     T0 = 217.0        # Total temperature at cruise [K]
     p_exit = 22000.0  # Exit pressure only slightly lower (smaller pressure drop)
 
-    # Initial conditions for scalars (UNCHANGED)
+    # Initial conditions for scalars
+    # Testing the bug fix: ice_initial=0 should give NO growth until nucleation
     n_initial = 1e12           # Particle number density [#/m³]
-    vapor_initial = 2e-4       # Initial vapor mass fraction
-    ice_initial = 1e-11         # Initial ice mass fraction
+    vapor_initial = 5e-5       # Initial vapor mass fraction (low - below nucleation)
+    ice_initial = 0.0          # Initial ice mass fraction (ZERO - no existing ice)
 
     # Convert to specific quantities (per unit total mass)
     # Use correct density for cruise altitude
