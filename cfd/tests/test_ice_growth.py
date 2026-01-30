@@ -275,36 +275,38 @@ class TestSourceTermSigns:
 
 
 class TestNucleation:
-    """Tests for nucleation behavior.
+    """Tests for nucleation behavior based on κ-Köhler theory.
     
-    Nucleation should only occur when ice supersaturation exceeds a critical threshold.
-    Based on κ-Köhler theory, critical supersaturation typically requires:
-    - S_ice > 1.4-1.6 (ice saturation ratio)
-    - e_fac > 0.4-0.6 (supersaturation factor)
+    Nucleation occurs when ice supersaturation S_ice exceeds critical threshold.
+    Based on κ-Köhler theory (Petters & Kreidenweis):
+    - S_ice = p_vapor / p_sat_ice (ice saturation ratio)
+    - Critical threshold: S_crit ~ 1.4 (140% RH w.r.t. ice)
+    - Depends on aerosol properties (rd, kappa)
     
-    Currently nucleation is NOT implemented, so all tests verify NO growth from zero ice.
+    IMPORTANT: e_fac is ONLY for growth equation, NOT for nucleation!
+    - e_fac scales growth rate: dm/dt = a * m^b * e_fac
+    - Nucleation uses S_ice threshold from κ-Köhler theory
     """
 
     def test_no_nucleation_at_low_supersaturation(self, gas, simple_mesh, lookup_table):
-        """Verify no nucleation occurs when supersaturation is below critical threshold.
+        """Verify no nucleation occurs when S_ice is below critical threshold.
         
-        With low supersaturation (e_fac ~ 0.1-0.2) and zero ice mass, no nucleation
+        With low ice supersaturation (S_ice ~ 1.1-1.2) and zero ice mass, no nucleation
         should occur, even with particles present. This is below the critical
-        supersaturation threshold for homogeneous or heterogeneous nucleation.
+        supersaturation threshold S_crit ~ 1.4 from κ-Köhler theory.
         """
         from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water
         
-        # Create conditions with LOW supersaturation
-        # At T=220K: p_sat_ice ~ 103 Pa, p_sat_water ~ 125 Pa
+        # Create conditions with LOW ice supersaturation
+        # At T=220K: p_sat_ice ~ 2.7 Pa
         T = 220.0
         p_total = 25000.0
         rho = p_total / (gas.R * T)
         
-        # Set vapor to achieve e_fac ~ 0.15 (low supersaturation, below nucleation threshold)
-        # Target: p_vapor = p_sat_ice + 0.15 * (p_sat_water - p_sat_ice)
+        # Set vapor to achieve S_ice ~ 1.15 (below nucleation threshold of 1.4)
+        # S_ice = p_vapor / p_sat_ice
         p_sat_ice_val = psat_ice(np.array([T]))[0]
-        p_sat_water_val = psat_water(np.array([T]))[0]
-        target_p_vapor = p_sat_ice_val + 0.15 * (p_sat_water_val - p_sat_ice_val)
+        target_p_vapor = 1.15 * p_sat_ice_val  # 115% RH w.r.t. ice
         
         # Calculate required vapor mass fraction
         # p_vapor = rho_vapor * R_v * T, where R_v = R_universal / M_w
@@ -317,34 +319,33 @@ class TestNucleation:
             rho=rho,
             T=T,
             n_specific=1e15,  # Particles exist (potential nucleation sites)
-            Y_vapor=Y_vapor,  # Low supersaturation (e_fac ~ 0.15)
+            Y_vapor=Y_vapor,  # S_ice ~ 1.15 (below threshold)
             Y_ice=0.0         # ZERO ice mass
         )
         
         sources = ice_growth_source_term(state, simple_mesh, lookup_table)
         
-        # With zero ice and LOW supersaturation, no nucleation should occur
+        # With zero ice and S_ice < S_crit, no nucleation should occur
         assert np.allclose(sources[2], 0.0), \
-            f"No nucleation should occur at low supersaturation (e_fac ~ 0.15), got {sources[2]}"
+            f"No nucleation should occur at S_ice ~ 1.15 (< 1.4), got {sources[2]}"
         assert np.allclose(sources[1], 0.0), \
             f"No vapor consumption should occur without nucleation, got {sources[1]}"
     
     def test_no_nucleation_at_moderate_supersaturation(self, gas, simple_mesh, lookup_table):
         """Verify no nucleation at moderate supersaturation (below critical threshold).
         
-        Even at moderate supersaturation (e_fac ~ 0.3-0.4), which is still below
-        the critical threshold for nucleation (~0.6), no ice formation should occur.
+        Even at moderate ice supersaturation (S_ice ~ 1.3), which is still below
+        the critical threshold S_crit ~ 1.4, no ice formation should occur.
         """
-        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water, R, M_w
+        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, R, M_w
         
         T = 220.0
         p_total = 25000.0
         rho = p_total / (gas.R * T)
         
-        # Set vapor to achieve e_fac ~ 0.35 (moderate, still below nucleation threshold)
+        # Set vapor to achieve S_ice ~ 1.3 (moderate, still below nucleation threshold)
         p_sat_ice_val = psat_ice(np.array([T]))[0]
-        p_sat_water_val = psat_water(np.array([T]))[0]
-        target_p_vapor = p_sat_ice_val + 0.35 * (p_sat_water_val - p_sat_ice_val)
+        target_p_vapor = 1.3 * p_sat_ice_val  # 130% RH w.r.t. ice
         
         rho_vapor_target = target_p_vapor * M_w / (R * T)
         Y_vapor = rho_vapor_target / rho
@@ -354,7 +355,7 @@ class TestNucleation:
             rho=rho,
             T=T,
             n_specific=1e15,
-            Y_vapor=Y_vapor,  # Moderate supersaturation (e_fac ~ 0.35)
+            Y_vapor=Y_vapor,  # S_ice ~ 1.3 (below threshold)
             Y_ice=0.0
         )
         
@@ -362,26 +363,25 @@ class TestNucleation:
         
         # Still below nucleation threshold - no nucleation should occur
         assert np.allclose(sources[2], 0.0), \
-            f"No nucleation at moderate supersaturation (e_fac ~ 0.35 < 0.6), got {sources[2]}"
+            f"No nucleation at S_ice ~ 1.3 (< 1.4), got {sources[2]}"
     
     def test_nucleation_threshold_behavior(self, gas, simple_mesh, lookup_table):
         """Test nucleation occurs just above threshold but not just below.
         
         Verify that the nucleation threshold is sharp:
-        - e_fac = 0.55 (below threshold): no nucleation
-        - e_fac = 0.65 (above threshold): nucleation occurs
+        - S_ice = 1.35 (below threshold): no nucleation
+        - S_ice = 1.45 (above threshold): nucleation occurs
         """
-        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water, R, M_w
+        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, R, M_w
         
         T = 220.0
         p_total = 25000.0
         rho = p_total / (gas.R * T)
         
         p_sat_ice_val = psat_ice(np.array([T]))[0]
-        p_sat_water_val = psat_water(np.array([T]))[0]
         
-        # Test below threshold (e_fac = 0.55)
-        target_p_vapor_below = p_sat_ice_val + 0.55 * (p_sat_water_val - p_sat_ice_val)
+        # Test below threshold (S_ice = 1.35)
+        target_p_vapor_below = 1.35 * p_sat_ice_val
         rho_vapor_below = target_p_vapor_below * M_w / (R * T)
         Y_vapor_below = rho_vapor_below / rho
         
@@ -397,10 +397,10 @@ class TestNucleation:
         
         # Just below threshold: no nucleation
         assert np.allclose(sources_below[2], 0.0), \
-            f"No nucleation below threshold (e_fac=0.55), got {sources_below[2]}"
+            f"No nucleation below threshold (S_ice=1.35), got {sources_below[2]}"
         
-        # Test above threshold (e_fac = 0.65)
-        target_p_vapor_above = p_sat_ice_val + 0.65 * (p_sat_water_val - p_sat_ice_val)
+        # Test above threshold (S_ice = 1.45)
+        target_p_vapor_above = 1.45 * p_sat_ice_val
         rho_vapor_above = target_p_vapor_above * M_w / (R * T)
         Y_vapor_above = rho_vapor_above / rho
         
@@ -416,27 +416,26 @@ class TestNucleation:
         
         # Just above threshold: nucleation occurs
         assert np.all(sources_above[2] > 0), \
-            f"Nucleation should occur above threshold (e_fac=0.65), got {sources_above[2]}"
+            f"Nucleation should occur above threshold (S_ice=1.45), got {sources_above[2]}"
     
     def test_high_supersaturation_with_nucleation_creates_ice(self, gas, simple_mesh, lookup_table):
-        """Verify that nucleation occurs at HIGH supersaturation.
+        """Verify that nucleation occurs at HIGH ice supersaturation.
         
-        At high supersaturation (e_fac > 0.6), nucleation SHOULD occur when ice mass is zero.
+        At high ice supersaturation (S_ice > 1.4), nucleation SHOULD occur when ice mass is zero.
         This test verifies:
-        - Nucleation DOES occur when e_fac > critical threshold
+        - Nucleation DOES occur when S_ice > S_crit
         - Ice source becomes positive (new ice mass created)
         - Vapor is consumed
         """
-        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, psat_water, R, M_w
+        from cfd.scripts.ice_growth_source import ice_growth_source_term, psat_ice, R, M_w
         
         T = 220.0
         p_total = 25000.0
         rho = p_total / (gas.R * T)
         
-        # Set vapor to achieve e_fac ~ 0.8 (high supersaturation, above nucleation threshold)
+        # Set vapor to achieve S_ice ~ 1.6 (high, well above nucleation threshold of 1.4)
         p_sat_ice_val = psat_ice(np.array([T]))[0]
-        p_sat_water_val = psat_water(np.array([T]))[0]
-        target_p_vapor = p_sat_ice_val + 0.8 * (p_sat_water_val - p_sat_ice_val)
+        target_p_vapor = 1.6 * p_sat_ice_val  # 160% RH w.r.t. ice
         
         rho_vapor_target = target_p_vapor * M_w / (R * T)
         Y_vapor = rho_vapor_target / rho
@@ -446,7 +445,7 @@ class TestNucleation:
             rho=rho,
             T=T,
             n_specific=1e15,
-            Y_vapor=Y_vapor,  # High supersaturation (e_fac ~ 0.8)
+            Y_vapor=Y_vapor,  # S_ice ~ 1.6 (above threshold)
             Y_ice=0.0
         )
         
@@ -454,7 +453,7 @@ class TestNucleation:
         
         # With nucleation implemented: positive ice source
         assert np.all(sources[2] > 0), \
-            f"Nucleation should occur at high supersaturation (e_fac ~ 0.8), got {sources[2]}"
+            f"Nucleation should occur at high S_ice ~ 1.6 (> 1.4), got {sources[2]}"
         
         # Vapor should be consumed
         assert np.all(sources[1] < 0), \
@@ -469,16 +468,16 @@ class TestNucleation:
         """Document the expected supersaturation threshold for nucleation.
         
         This test verifies our understanding of supersaturation levels and serves
-        as documentation for future nucleation implementation.
+        as documentation for nucleation implementation based on κ-Köhler theory.
         
-        Key thresholds:
-        - e_fac = 0.0: Ice saturation (S_ice = 1.0)
-        - e_fac = 0.4-0.6: Critical supersaturation for heterogeneous nucleation
-        - e_fac = 1.0: Water saturation (S_ice ≈ 1.7 at 220K)
-        - e_fac > 1.0: Above water saturation
+        Key relationships:
+        - S_ice = p_vapor / p_sat_ice (ice saturation ratio)
+        - Critical threshold: S_crit ~ 1.4 (140% RH w.r.t. ice)
+        - e_fac = (p_vapor - p_sat_ice) / (p_sat_water - p_sat_ice)
         
-        Relationship: e_fac = (p_vapor - p_sat_ice) / (p_sat_water - p_sat_ice)
-                      S_ice = p_vapor / p_sat_ice
+        IMPORTANT: e_fac is ONLY for growth, NOT for nucleation!
+        - Growth: dm/dt = a * m^b * e_fac
+        - Nucleation: S_ice > S_crit (from κ-Köhler theory)
         """
         from cfd.scripts.ice_growth_source import psat_ice, psat_water
         
@@ -493,34 +492,26 @@ class TestNucleation:
         assert 4.0 < p_sat_water_val < 5.0, f"Expected p_sat_water ~ 4.5 Pa at 220K, got {p_sat_water_val}"
         
         # Document key thresholds
-        # At ice saturation (e_fac = 0):
-        e_fac_ice_sat = 0.0
-        S_ice_at_ice_sat = 1.0
+        # Ice saturation: S_ice = 1.0
+        S_ice_saturation = 1.0
         
-        # At water saturation (e_fac = 1):
-        e_fac_water_sat = 1.0
+        # Water saturation: S_ice = p_sat_water / p_sat_ice
         S_ice_at_water_sat = p_sat_water_val / p_sat_ice_val
         
         # Expected range: S_ice ~ 1.7 at water saturation for 220K
         assert 1.6 < S_ice_at_water_sat < 1.8, \
             f"S_ice at water saturation should be ~1.7, got {S_ice_at_water_sat}"
         
-        # Critical nucleation threshold (typical values)
-        # For heterogeneous nucleation: S_ice ~ 1.4-1.6 → e_fac ~ 0.5-0.7
-        # At 220K with S_ice_water ~ 1.7:
-        #   S_ice = 1.4 → e_fac = (1.4 - 1.0) / (1.7 - 1.0) = 0.57
-        #   S_ice = 1.5 → e_fac = (1.5 - 1.0) / (1.7 - 1.0) = 0.71
-        e_fac_critical_low = (1.4 - 1.0) / (S_ice_at_water_sat - 1.0)
-        e_fac_critical_high = (1.5 - 1.0) / (S_ice_at_water_sat - 1.0)
+        # Critical nucleation threshold from κ-Köhler theory
+        # For typical aerosol (rd ~ 0.1 μm, kappa ~ 0.5): S_crit ~ 1.4
+        S_crit = 1.4  # 140% RH w.r.t. ice
         
-        # Verify critical thresholds are in expected range
-        assert 0.5 < e_fac_critical_low < 0.7, \
-            f"Expected e_fac_critical_low ~ 0.57, got {e_fac_critical_low}"
-        assert 0.6 < e_fac_critical_high < 0.8, \
-            f"Expected e_fac_critical_high ~ 0.71, got {e_fac_critical_high}"
+        # Verify critical threshold is reasonable
+        assert S_ice_saturation < S_crit < S_ice_at_water_sat, \
+            f"S_crit should be between ice and water saturation: {S_ice_saturation} < {S_crit} < {S_ice_at_water_sat}"
         
         # This test passes to document thresholds
-        assert True, "Supersaturation thresholds documented"
+        assert True, "Supersaturation thresholds documented for κ-Köhler nucleation"
 
 
 class TestEvaporation:
