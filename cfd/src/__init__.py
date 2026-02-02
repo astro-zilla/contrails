@@ -11,6 +11,25 @@ Features:
 - 2nd order MUSCL reconstruction
 - HLLC flux scheme
 - RK4 time integration
+
+State representation (conservative variables):
+    rho   - density [kg/m³]
+    rhoU  - momentum per volume [kg/(m²·s)]
+    rhoE  - total energy per volume [J/m³]
+    phi   - scalar per volume [1/m³] (phi = rho * Y)
+
+Source rates use symbol S.
+
+Example:
+    # Create state from primitive variables
+    state = FlowState.from_primitives(rho=rho, u=u, p=p, Y=Y, gas=gas)
+
+    # Access primitive variables as properties
+    print(state.u, state.p, state.T, state.Y)
+
+    # Convert to/from array form
+    U = state.to_array()  # [rho, rhoU, rhoE, phi_0, phi_1, ...]
+    state2 = FlowState.from_array(U, gas)
 """
 
 from .gas import GasProperties

@@ -175,7 +175,7 @@ def create_shock_tube_solver(gas, mesh, config):
     u = np.zeros(mesh.n_cells)
     p = np.where(mesh.x_cells < 0.5, 100000.0, 10000.0)
 
-    initial_state = FlowState(
+    initial_state = FlowState.from_primitives(
         rho=rho, u=u, p=p,
         Y=np.zeros((0, mesh.n_cells)),
         gas=gas

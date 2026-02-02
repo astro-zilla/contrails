@@ -104,7 +104,7 @@ def create_nozzle_solver(gas, mesh, config, n_scalars=0):
     for i in range(n_scalars):
         Y[i, :] = Y_inlet[i]
 
-    initial_state = FlowState(rho=rho, u=u, p=p, Y=Y, gas=gas)
+    initial_state = FlowState.from_primitives(rho=rho, u=u, p=p, Y=Y, gas=gas)
     solver.set_initial_condition(initial_state)
 
     return solver

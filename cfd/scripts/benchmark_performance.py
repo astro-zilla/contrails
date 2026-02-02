@@ -62,7 +62,7 @@ def run_benchmark(n_cells=100, n_scalars=2, time_scheme='rk4', cfl=0.8, max_iter
     Y[0, :] = Y_inlet[0]
     Y[1, :] = Y_inlet[1]
 
-    initial_state = FlowState(rho=rho, u=u, p=p, Y=Y, gas=gas)
+    initial_state = FlowState.from_primitives(rho=rho, u=u, p=p, Y=Y, gas=gas)
     solver.set_initial_condition(initial_state)
 
     # Time the solve

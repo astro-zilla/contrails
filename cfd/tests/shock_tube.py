@@ -258,7 +258,7 @@ def run_shock_tube_test(n_cells: int = 200, t_final: float = 0.0002,
     u = np.zeros(n_cells)
     p = np.where(mesh.x_cells < 0.5, 100000.0, 10000.0)
 
-    initial_state = FlowState(
+    initial_state = FlowState.from_primitives(
         rho=rho,
         u=u,
         p=p,

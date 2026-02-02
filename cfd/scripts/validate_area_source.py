@@ -165,7 +165,7 @@ def run_validation_test():
     rho_init = p_init / (gas.R * T_init)
     u_init = M_init * np.sqrt(gas.gamma * gas.R * T_init)
 
-    initial_state = FlowState(
+    initial_state = FlowState.from_primitives(
         rho=np.full(n_cells, rho_init),
         u=np.full(n_cells, u_init),
         p=np.full(n_cells, p_init),

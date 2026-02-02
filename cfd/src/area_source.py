@@ -4,6 +4,9 @@ Area source term for quasi-1D compressible flow.
 In quasi-1D flow with variable area, the momentum equation requires
 an explicit source term to account for pressure forces on the
 changing cross-section.
+
+Notation:
+    S - source rate array
 """
 
 import numpy as np
@@ -32,14 +35,14 @@ class AreaSourceTerm(SourceTerm):
         Compute the area source term.
 
         Args:
-            state: Current flow state
+            state: Current flow state (conservative variables)
             mesh: Computational mesh
 
         Returns:
-            Source term array of shape (n_vars, n_cells)
-            Only momentum equation (index 1) has non-zero source
+            S: Source rate array of shape (n_vars, n_cells)
+               Only momentum equation (index 1) has non-zero source
         """
-        n_scalars = state.Y.shape[0]
+        n_scalars = state.phi.shape[0]
         n_vars = 3 + n_scalars
         S = np.zeros((n_vars, mesh.n_cells))
 

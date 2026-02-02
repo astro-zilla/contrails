@@ -220,20 +220,20 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
         lookup_table: Pre-loaded ice growth lookup table
 
     Returns:
-        sources: Source terms [kg/(m³·s)] for each scalar
+        S: Source rates [1/(m³·s)] for each scalar (d(phi)/dt = S)
     """
-    n_scalars = state.Y.shape[0]
+    n_scalars = state.phi.shape[0]
     n_cells = mesh.n_cells
-    sources = np.zeros((n_scalars, n_cells))
+    S = np.zeros((n_scalars, n_cells))
 
     if n_scalars < 3:
         raise ValueError(f"Expected 3 scalars (n, vapor, ice), got {n_scalars}")
 
-    # Extract scalar densities
+    # Extract scalar concentrations directly from conservative variables (phi = rho * Y)
     rho = state.rho                    # Total density [kg/m³]
-    n = state.Y[0] * rho               # Particle number density [#/m³]
-    rho_vapor = state.Y[1] * rho       # Vapor density [kg/m³]
-    rho_ice = state.Y[2] * rho         # Ice density [kg/m³]
+    n = state.phi[0]                   # Particle number density [#/m³]
+    rho_vapor = state.phi[1]           # Vapor density [kg/m³]
+    rho_ice = state.phi[2]             # Ice density [kg/m³]
 
     # Compute mean particle mass
     # Avoid division by zero where n → 0
@@ -294,7 +294,7 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
     # Works for both growth (e_fac > 0) and evaporation (e_fac < 0)
     dm_dt = np.where(
         (n > 1e-10) & (np.abs(e_fac) > 1e-10),  # Require particles and non-zero e_fac
-        a * np.power(np.maximum(m_particle, 1e-20), b) * e_fac,
+        a * np.power(m_particle, b) * e_fac,
         0.0
     )
 
@@ -320,15 +320,15 @@ def ice_growth_source_term(state: FlowState, mesh: Mesh1D,
 
     # Apply sources
     # Scalar 0: Particle number (conserved)
-    sources[0] = 0.0
+    S[0] = 0.0
 
     # Scalar 1: Water vapor (consumed by ice growth)
-    sources[1] = -ice_growth_rate
+    S[1] = -ice_growth_rate
 
     # Scalar 2: Ice mass (grows from vapor)
-    sources[2] = ice_growth_rate
+    S[2] = ice_growth_rate
 
-    return sources
+    return S
 
 
 def create_ice_growth_source(hdf5_path: str = None) -> ScalarSourceTerm:
@@ -412,8 +412,8 @@ def example_contrail_simulation():
 
     # Initial conditions for scalars (UNCHANGED)
     n_initial = 1e12           # Particle number density [#/m³]
-    vapor_initial = 2e-4       # Initial vapor mass fraction
-    ice_initial = 1e-11         # Initial ice mass fraction
+    vapor_initial = 3.2e-5       # Initial vapor mass fraction
+    ice_initial = 0#1e-11         # Initial ice mass fraction
 
     # Convert to specific quantities (per unit total mass)
     # Use correct density for cruise altitude
@@ -440,7 +440,7 @@ def example_contrail_simulation():
     Y[1, :] = Y_inlet[1]
     Y[2, :] = Y_inlet[2]
 
-    initial_state = FlowState(
+    initial_state = FlowState.from_primitives(
         rho=np.full(n_cells, rho_init),
         u=np.full(n_cells, u_init),
         p=np.full(n_cells, p_init),

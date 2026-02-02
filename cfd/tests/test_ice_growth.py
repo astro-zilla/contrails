@@ -68,7 +68,7 @@ def create_test_state(gas, n_cells, rho=0.4, u=100.0, p=25000.0, T=220.0,
     Y[1, :] = Y_vapor     # Vapor mass fraction
     Y[2, :] = Y_ice       # Ice mass fraction
 
-    return FlowState(
+    return FlowState.from_primitives(
         rho=np.full(n_cells, rho),
         u=np.full(n_cells, u),
         p=np.full(n_cells, p),
@@ -247,12 +247,11 @@ class TestSourceTermSigns:
 
 
 class TestNucleation:
-    """Tests for nucleation behavior (placeholder for future implementation)."""
+    """Tests for nucleation behavior - placeholder until nucleation is implemented."""
 
     def test_placeholder(self, gas, simple_mesh, lookup_table):
-        """Placeholder test - nucleation parameters not yet in ice_growth_source_term."""
+        """Placeholder test - nucleation not yet implemented in ice_growth_source_term."""
         # TODO: Add nucleation tests when rd and kappa parameters are added
-        # to ice_growth_source_term function
         pass
 
 

@@ -3,6 +3,11 @@ Source term classes for the 1D compressible flow solver.
 
 Extensible architecture allowing custom source terms for scalars,
 momentum, energy, etc.
+
+Notation:
+    U   - conservative variable array [rho, rhoU, rhoE, phi_0, ...]
+    S   - source rate array (same shape as U)
+    phi - scalar concentration per volume (rho * Y)
 """
 
 import numpy as np
@@ -22,11 +27,11 @@ class SourceTerm(ABC):
         Compute source term contribution.
 
         Args:
-            state: Current flow state
+            state: Current flow state (conservative variables)
             mesh: Computational mesh
 
         Returns:
-            Source term array of shape (n_vars, n_cells)
+            S: Source rate array of shape (n_vars, n_cells)
         """
         pass
 
@@ -41,23 +46,24 @@ class ScalarSourceTerm(SourceTerm):
     def __init__(self, source_func: Callable[[FlowState, Mesh1D], np.ndarray]):
         """
         Args:
-            source_func: Function(state, mesh) -> sources of shape (n_scalars, n_cells)
-                         Returns the source term S in d(rho*Y)/dt = S
+            source_func: Function(state, mesh) -> S_phi of shape (n_scalars, n_cells)
+                         Returns the source term S in d(phi)/dt = S
+                         where phi = rho * Y is scalar concentration per volume
         """
         self.source_func = source_func
 
     def compute(self, state: FlowState, mesh: Mesh1D) -> np.ndarray:
-        n_scalars = state.Y.shape[0]
+        n_scalars = state.phi.shape[0]
         n_vars = 3 + n_scalars
 
         S = np.zeros((n_vars, mesh.n_cells))
 
         # Compute scalar sources
-        scalar_sources = self.source_func(state, mesh)
+        S_phi = self.source_func(state, mesh)
 
-        # Vectorized assignment (no loop)
+        # Assign to scalar equations (indices 3 onwards)
         if n_scalars > 0:
-            S[3:] = scalar_sources
+            S[3:] = S_phi
 
         return S
 
@@ -74,10 +80,10 @@ class CompositeSourceTerm(SourceTerm):
 
     def compute(self, state: FlowState, mesh: Mesh1D) -> np.ndarray:
         if not self.sources:
-            n_vars = 3 + state.Y.shape[0]
+            n_vars = 3 + state.phi.shape[0]
             return np.zeros((n_vars, mesh.n_cells))
 
-        total = self.sources[0].compute(state, mesh)
+        S_total = self.sources[0].compute(state, mesh)
         for source in self.sources[1:]:
-            total += source.compute(state, mesh)
-        return total
+            S_total += source.compute(state, mesh)
+        return S_total
